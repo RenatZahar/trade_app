@@ -1,0 +1,1 @@
+# в app_project\data\bitcoin_price\raw_btc_price закинуть https://www.cryptoarchive.com.au/bars/BTCUSDT
