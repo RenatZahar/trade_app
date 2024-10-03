@@ -1,0 +1,6 @@
+команда 
+pip freeze > requirements.txt
+но перед этим -создание отдельного окружения для проекта
+
+
+установка зависимостей - pip install -r requirements.txt
