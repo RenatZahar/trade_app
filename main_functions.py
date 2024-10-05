@@ -5,6 +5,9 @@ import logging
 import threading
 import asyncio
 from pathlib import Path
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from modules.btc_core_init.btc_core_manager import get_btc_status
 from modules.blockchain_parser.main_parser  import parser
