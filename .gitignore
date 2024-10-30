@@ -33,3 +33,5 @@ Thumbs.db
 *.gz
 *.ipynb
 *.db
+*.db-shm
+*.db-wal

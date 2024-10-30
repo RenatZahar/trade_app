@@ -121,7 +121,7 @@ def transfer_script():
 
     # Перенос данных по частям без использования DataFrame
     batch_size = 15000000  # Размер пакета данных
-
+ 
     # Создаем курсор для старой базы данных
     old_cursor = old_conn.cursor()
     old_cursor.execute("""
