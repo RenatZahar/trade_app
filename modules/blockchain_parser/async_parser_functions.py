@@ -1,12 +1,7 @@
 # async_parser_functions.py
 import statistics
 import pandas as pd
-import copy
-
 import os
-import re
-import gzip
-from datetime import datetime
 from collections import OrderedDict
 from bitcoinrpc.authproxy import AuthServiceProxy
 import cProfile
@@ -21,19 +16,15 @@ import aiofiles
 from aiohttp import ClientTimeout
 import traceback
 import sqlite3
-import logging
 import aiosqlite
 from functools import wraps
 import aiosqlite
 import asyncio
-import logging
 import time
 import traceback
-from pathlib import Path 
 import numpy as np
 
 from config import setup_logging, CLEARED_PRICES_DIR # type: ignore #переменные подгружаются корректно, проблема в папках
-
 from .config import (
     REQUESTS_QUANTITY,
     MIN_VALUE_THRESHOLD,
@@ -42,11 +33,15 @@ from .config import (
     MAX_SAVE_TASKS
     )
 
+sqlite3.register_adapter(np.int32, int)
+sqlite3.register_adapter(np.int64, int)
 
 rpc_user=os.getenv('RPC_USER')
 rpc_password=os.getenv('RPC_PASSWORD')
 rpc_host=os.getenv('RPC_HOST')
 rpc_port=os.getenv('RPC_PORT')
+
+last_request_time = None
 
 global_count = 0
 avg_cache_vin = []
@@ -61,12 +56,7 @@ avg_lock = asyncio.Lock()
 rpc_lock = asyncio.Lock()
 print_lock = asyncio.Lock()
 
-save_semaphore = asyncio.Semaphore(MAX_SAVE_TASKS)
-
-sqlite3.register_adapter(np.int32, int)
-sqlite3.register_adapter(np.int64, int)
-
-# async_parser_functions.py
+save_semaphore = asyncio.Semaphore(MAX_SAVE_TASKS) #пока дожидаемся сохранения перед след циклом загрузки
 logger = setup_logging(__name__)
     
 def retry(max_attempts=3, delay=1, exceptions=(Exception,)):
@@ -88,9 +78,7 @@ def retry(max_attempts=3, delay=1, exceptions=(Exception,)):
     return decorator
     
 async def set_wal_mode(db_path):
-    """
-    Устанавливает режим журналирования базы данных на WAL.
-    """
+    # Устанавливает режим журналирования базы данных на WAL.
     try:
         async with aiosqlite.connect(db_path) as db:
             await db.execute("PRAGMA journal_mode=WAL;")
@@ -183,49 +171,12 @@ async def async_create_table(db_path, table_name='data_table'):
 
 async def init_db_mod(db_path, table_name='data_table'):
     await async_set_foreign_keys(db_path, enable=True)
-    await async_set_journal_mode_wal(db_path)
+    await set_wal_mode(db_path)
     await async_set_synchronous_normal(db_path)
     await async_set_cache_size(db_path, cache_size=-2000000)  # Настройте значение по необходимости
     await async_create_table(db_path, table_name)
     await async_vacuum_analyze(db_path)
     await async_create_indexes(db_path, table_name)
-
-async def async_alter_table_set_primary_key(db_path, table_name='data_table'):
-    try:
-        async with aiosqlite.connect(db_path) as db:
-            await db.execute("BEGIN")
-            
-            # Создание новой таблицы с Transaction_id как PRIMARY KEY
-            await db.execute(f"""
-                CREATE TABLE IF NOT EXISTS {table_name}_new (
-                    Transaction_id TEXT PRIMARY KEY,
-                    Wallet_id TEXT,
-                    Amount REAL,
-                    Btc_block_time_price REAL,
-                    Block_time INTEGER,
-                    Block_height INTEGER,
-                    Block_hash TEXT,
-                    n INTEGER
-                );
-            """)
-            
-            # Копирование данных из старой таблицы в новую
-            await db.execute(f"""
-                INSERT INTO {table_name}_new (Transaction_id, Wallet_id, Amount, Btc_block_time_price, Block_time, Block_height, Block_hash, n)
-                SELECT Transaction_id, Wallet_id, Amount, Btc_block_time_price, Block_time, Block_height, Block_hash, n FROM {table_name};
-            """)
-            
-            # Удаление старой таблицы
-            await db.execute(f"DROP TABLE {table_name};")
-            
-            # Переименование новой таблицы в старое имя
-            await db.execute(f"ALTER TABLE {table_name}_new RENAME TO {table_name};")
-            
-            await db.commit()
-            logger.info(f"Таблица '{table_name}' успешно изменена с Transaction_id как PRIMARY KEY.")
-    except Exception as e:
-        await db.execute("ROLLBACK")
-        logger.error(f"Ошибка при изменении структуры таблицы: {e}")
 
 async def async_print_db_schema(db_path, table_name='data_table'):
     try:
@@ -242,7 +193,6 @@ async def async_print_db_schema(db_path, table_name='data_table'):
                 print(f"Таблица '{table_name}' не найдена.")
     except Exception as e:
         print(f"Ошибка при получении схемы базы данных: {e}")
-
 
 def init_cache():
     global tx_cache, blocks_hash_cache
@@ -285,7 +235,6 @@ def open_blocks_hash_cache(filename):
             print(f'Читаем {filename} из файла')
             return cache
 
-# сохранение кэша в файл не используется в данной версии
 async def async_save_cache_to_file(cache, filename):
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, lambda: save_cache_to_file(cache, filename))
@@ -357,7 +306,6 @@ async def save_to_cache(tx_details_list, cache_type, old_txs = False):
                         blocks_hash_cache[txid] = tx_detail.get('blockhash', None)
 
 async def async_get_existing_last_block(db_path, start_block):
-
     try:
         async with aiosqlite.connect(db_path) as db:
             cursor = await db.execute("SELECT MAX(Block_height) FROM data_table;")
@@ -375,23 +323,12 @@ async def async_get_existing_last_block(db_path, start_block):
     except Exception as e:
         logger.error(f"Ошибка при доступе к базе данных: {e}")
         return start_block
-
     # logger.info(f"Время выполнения async_get_existing_last_block: {elapsed_time:.6f} секунд")
 
 def get_bicoin_prices(filepath):
     df = pd.read_parquet(CLEARED_PRICES_DIR)
-    # with gzip.open(filepath, 'rt') as file:
-    #     df = pd.read_csv(file, delimiter='|') # type: ignore
-    #     df.columns = ['Timestamp', 'Open', 'High', 'Low', 'Close', 'Volume', 'Taker Buy Quote Asset Volume', 'Taker Buy Base Asset Volume', 'Quote Asset Volume', 'Number of trades']
-    #     df.drop(['Open', 'Close', 'Volume', 'Taker Buy Quote Asset Volume', 'Taker Buy Base Asset Volume', 'Quote Asset Volume'], axis=1, inplace=True)
-    #     now_s = int(datetime.now().timestamp())
-    #     time_period_s = 790 * 86400
-    #     df = df[df['Timestamp'] >= (now_s - time_period_s)]
-    #     df['Price'] = (df['High'] + df['Low']) / 2
-    #     df['H_timestamp'] = pd.to_datetime(df['Timestamp'], unit='s')
-    #     df = df[['Price', 'Timestamp', 'H_timestamp']]
-    print('CLEARED_PRICES_DIR')
-    print(df.tail())
+    logger.info('CLEARED_PRICES_DIR')
+    logger.info(f'\n{df.tail()}')
     return df
     
 async def get_btc_price_of_timestamp(timestamp, btc_price):
@@ -409,23 +346,22 @@ def get_list_of_blocks_to_download(biggest_downloaded_block, rpc_connection):
         return(list_of_blocks_to_download)
 
 def split_list_into_chunks(lst, QUANTITY_OF_BLOCKS_IN_ITERATION, MAX_ITERATIONS, blocks_to_remove):
-    print(f'Первый блок для загрузки: {lst[0]}')
-    print(f'Осталось загрузить блоков: {lst[-1]-lst[0]}')
-
+    logger.info(f'Первый блок для загрузки: {lst[0]}')
+    logger.info(f'Осталось загрузить блоков: {lst[-1]-lst[0]}')
     current_iteration = 0
     while MAX_ITERATIONS != current_iteration:
         current_iteration += 1
         current_blocks = lst[:QUANTITY_OF_BLOCKS_IN_ITERATION]
         if len(current_blocks) == 1:
-            print(f"\nИтерация - {current_iteration} из {MAX_ITERATIONS}, блок: {current_blocks[0]}.")
+            logger.info(f"\nИтерация - {current_iteration} из {MAX_ITERATIONS}, блок: {current_blocks[0]}.")
         else:
-            print(f"\nИтерация - {current_iteration} из {MAX_ITERATIONS}, блоков: {len(current_blocks)}.")
+            logger.info(f"\nИтерация - {current_iteration} из {MAX_ITERATIONS}, блоков: {len(current_blocks)}.")
 
         if blocks_to_remove:
-            print(f'проверка на блоки {blocks_to_remove} в чанке')
+            logger.info(f'проверка на блоки {blocks_to_remove} в чанке')
             for i in blocks_to_remove:
                 if i in current_blocks:
-                    print('Есть, удаляем')
+                    logger.info('Есть, удаляем')
                     current_blocks.remove(i) # type: ignore
 
         del lst[:QUANTITY_OF_BLOCKS_IN_ITERATION]
@@ -433,6 +369,7 @@ def split_list_into_chunks(lst, QUANTITY_OF_BLOCKS_IN_ITERATION, MAX_ITERATIONS,
 
 async def amount_and_counbase_filter(tx_list):
     count = 0
+
     tx_list = [
         tx_details for tx_details in tx_list 
         if tx_details is not None and 
@@ -502,8 +439,6 @@ def sync_rpc_connection(rpc_connection, rpc_method, *args):
     print("Не удалось установить соединение после 150 попыток.")
     return None
 
-last_request_time = None
-
 async def async_rpc_connection(rpc_method, height, *args):
     global last_request_time, rpc_user, rpc_password, rpc_host, rpc_port
     url = f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}"
@@ -534,31 +469,30 @@ async def async_rpc_connection(rpc_method, height, *args):
                         if 'Work queue depth exceeded' in error_text:
                             await asyncio.sleep(2)
                             continue
-                        print(f'Ошибка запроса: {response.status}, {error_text}')
+                        logger.error(f'Ошибка запроса: {response.status}, {error_text}')
                         await asi_sleep(attempt)
 
             except Exception as e:
-                print(f'Ошибка запроса: {e}, блок {height}')
-                print(f'Попытка {i+1}')
-                print(traceback.format_exc())
+                logger.error(f'Ошибка запроса: {e}, блок {height}')
+                logger.error(f'Попытка {i+1}')
+                logger.error(traceback.format_exc())
                 await asyncio.sleep(10)  # Задержка перед повторной попыткой
 
-        print("Не удалось установить соединение после 150 попыток.")
+        logger.error("Не удалось установить соединение после 150 попыток.")
         exit()
 
 async def asi_sleep(attempt):
     if attempt > 50 and attempt < 100:
         await asyncio.sleep(10)
     elif attempt >= 100:
-        print('Большая задержка ответа')
+        logger.error('Большая задержка ответа')
         await asyncio.sleep(30)
     elif attempt == 150:
-        print('Exit из async def asi_sleep(attempt)')
+        logger.error('Exit из async def asi_sleep(attempt)')
         exit()
     else:
-        print('Ожидание ответа, asi_sleep(attempt), attempt<50')
+        logger.error('Ожидание ответа, asi_sleep(attempt), attempt<50')
         await asyncio.sleep(1)
-
 
 async def parsing_data(block_list):
     init_cache()
@@ -566,7 +500,6 @@ async def parsing_data(block_list):
     rpc_connection = get_rpc_connection()   
     height, blocks_hashes, block_times, transactions_of_group_of_block = get_transactions_of_blocks(block_list, rpc_connection) 
     all_records = await process_all_blocks(height, blocks_hashes, block_times, transactions_of_group_of_block, btc_price, rpc_connection)
-
     pd_data = records_to_df(all_records)
     gc.collect()
     return pd_data  
@@ -602,18 +535,16 @@ async def process_all_blocks(heights, blocks_hashes, block_times, transactions_o
 async def process_block(index, number, height, block_hash, block_time, transactions_of_block, btc_price, rpc_connection):
     global tx_cache, blocks_hash_cache
     records_of_block = []
-    print(f'Обработка блока {height}, {index+1}/{number}, транзакций: {len(transactions_of_block)}')
+    logger.info(f'Обработка блока {height}, {index+1}/{number}, транзакций: {len(transactions_of_block)}')
 
     btc_time_price = await get_btc_price_of_timestamp(block_time, btc_price)
     commands = [["getrawtransaction", [tx, 1, block_hash]] for tx in transactions_of_block]
-    print(f'Отправка запроса для {height}')
+    # logger.info(f'Отправка запроса для {height}')
     start_time = time.time()
     tx_details_list = await async_rpc_connection(None, height, commands)
     end_time = time.time()
-    print(f'Блок {height}, {index+1}/{number}, получение данных по \033[93mvout, сек: {round(end_time-start_time, 4)}\033[0m, транзакций: {len(tx_details_list)}')
-    
+    logger.info(f'Блок {height}, {index+1}/{number}, получение данных по \033[93mvout, сек: {round(end_time-start_time, 4)}\033[0m, транзакций: {len(tx_details_list)}')
     tx_details_list = await amount_and_counbase_filter(tx_details_list)
-
     await save_to_cache(tx_details_list, 'tx_cache')  
             
     prev_tx_vout_to_current_tx_map = {}
@@ -639,17 +570,7 @@ async def process_block(index, number, height, block_hash, block_time, transacti
         records_of_block.extend(records)
     return records_of_block
     
-def records_to_df(all_records):
-    df = pd.DataFrame(all_records, columns=['Transaction_id', 'Wallet_id', 'Amount', 'Btc_block_time_price', 'Block_time', 'Block_height', 'Block_hash', 'n'])
-    df['Amount'] = df['Amount'].astype('float64')
-    df = df.groupby(['Transaction_id', 'Wallet_id', 'Btc_block_time_price', 'Block_time', 'Block_height', 'Block_hash', 'n']).agg(
-        Amount=('Amount', 'sum'),
-        Transactions_Count=('n', 'count')
-                    ).reset_index()
-    
-    df = df.sort_values(by='Block_height')
-    df = df.reset_index(drop=True)
-    return df
+
 
 async def cleaning_tx_vout_data(tx_id, tx_details, height, block_hash, block_time, btc_time_price):
     records = []
@@ -775,29 +696,10 @@ async def cleaning_tx_vin_data(index, number, prev_tx_vout_to_current_tx_map, he
         print('\033[31mРазница больше 20 процентов\033[0m')
     return records
 
-
 def get_statistik_data(data):
     min_block_height = data['Block_height'].min()
     max_block_height = data['Block_height'].max()
     return min_block_height, max_block_height
-
-async def async_print_db_schema(db_path, table_name='data_table'):
-    try:
-        async with aiosqlite.connect(db_path) as db:
-            cursor = await db.execute(f"PRAGMA table_info('{table_name}');")
-            columns_info = await cursor.fetchall()
-            await cursor.close()
-            if columns_info:
-                print(f"Схема таблицы '{table_name}':")
-                for column in columns_info:
-                    cid, name, type_, notnull, dflt_value, pk = column
-                    print(f" - Столбец: {name}, Тип данных: {type_}, NOT NULL: {notnull}, Значение по умолчанию: {dflt_value}, Первичный ключ: {pk}")
-            else:
-                print(f"Таблица '{table_name}' не найдена.")
-    except Exception as e:
-            print(f"Ошибка при проверке данных столбца 'Block_height': {e}")
-            traceback.print_exc()
-
 
 async def async_check_block_height_data(db_path, table_name='data_table'):
     try:
@@ -818,6 +720,30 @@ async def async_check_block_height_data(db_path, table_name='data_table'):
                     print(f" - Значение: {value}, Тип данных: {value_type}")
     except Exception as e:
         print(f"Ошибка при проверке данных столбца 'Block_height': {e}")
+
+def records_to_df(all_records):
+    # Подготовка данных к сохранению
+    df = pd.DataFrame(all_records, columns=['Transaction_id', 'Wallet_id', 'Amount', 'Btc_block_time_price', 'Block_time', 'Block_height', 'Block_hash', 'n'])
+    df['Amount'] = df['Amount'].astype('float64')
+    df = df.groupby(['Transaction_id', 'Wallet_id', 'Btc_block_time_price', 'Block_time', 'Block_height', 'Block_hash', 'n']).agg(
+        Amount=('Amount', 'sum'),
+        Transactions_Count=('n', 'count')
+                    ).reset_index()
+    
+    df = df.sort_values(by='Block_height')
+    df = df.reset_index(drop=True)
+    df['Transaction_id'] = df['Transaction_id'].astype(str)
+    df['Wallet_id'] = df['Wallet_id'].astype(str)
+    df['Amount'] = df['Amount'].astype(float)
+    df['Btc_block_time_price'] = df['Btc_block_time_price'].astype(float)
+    df['Block_hash'] = df['Block_hash'].astype(str)
+    df['Block_time'] = df['Block_time'].astype(int)
+    df['Block_height'] = df['Block_height'].astype(int)
+    df['n'] = df['n'].astype(int)
+    df['Transactions_Count'] = df['Transactions_Count'].astype(int)
+
+    return df
+
 
 async def save_data_to_db_with_semaphore(data, db_path):
     async with save_semaphore:
@@ -855,48 +781,20 @@ async def async_save_data_to_db(data, db_path, table_name='data_table'):
                 );
             """)
             # logger.info(f"Таблица '{table_name}' проверена/создана.")
-
-            # Подготовка данных
-            # Подготовка данных
-            data = data.sort_values(by='Block_height').reset_index(drop=True)
-            
-            data['Transaction_id'] = data['Transaction_id'].astype(str)
-            data['Wallet_id'] = data['Wallet_id'].astype(str)
-            data['Amount'] = data['Amount'].astype(float)
-            data['Btc_block_time_price'] = data['Btc_block_time_price'].astype(float)
-            data['Block_hash'] = data['Block_hash'].astype(str)
-
-            data['Block_time'] = data['Block_time'].astype(int)
-            data['Block_height'] = data['Block_height'].astype(int)
-            data['n'] = data['n'].astype(int)
-            data['Transactions_Count'] = data['Transactions_Count'].astype(int)
-
-            # logger.info("Данные подготовлены и приведены к необходимым типам.")
-
             # Преобразование DataFrame в список кортежей для вставки
             records = data.to_records(index=False)
-
-
             records = list(records)
             # for record in records[:10]:  # Просмотреть первые 10 записей
             #     logger.info(f"Типы данных записи: {[type(value) for value in record]}")
-            # logger.info(f"Преобразовано {len(records)} записей для вставки.")
-
             # Формирование списка столбцов и плейсхолдеров
             columns = ', '.join(data.columns)
             placeholders = ', '.join(['?'] * len(data.columns))
-            # logger.info('columns')
-            # logger.info(columns)
-            # logger.info('placeholders')
-            # logger.info(placeholders)
             # Вставка данных
             insert_query = f"INSERT OR IGNORE INTO {table_name} ({columns}) VALUES ({placeholders});"
             await db.executemany(insert_query, records)
             # logger.info(f"Вставлено {len(records)} записей в таблицу '{table_name}'.")
-
             await db.commit()  # Фиксация транзакции
             # logger.info("Транзакция успешно зафиксирована.")
-
             # logger.info(f"Сохранено {len(records)} записей в таблицу '{table_name}'.")
             logger.info("\033[92mОбработка завершена, данные сохранены.\033[0m")
 
@@ -908,62 +806,6 @@ async def async_save_data_to_db(data, db_path, table_name='data_table'):
         end_time = time.perf_counter()
         elapsed_time = end_time - start_time
         logger.info(f"Время выполнения async_save_data_to_db: {elapsed_time:.6f} секунд")
-
-
-# async def async_save_data_to_db(data, db_path, table_name='data_table'):
-#     start_time = time.perf_counter()
-#     try:
-#         async with aiosqlite.connect(db_path) as db:
-#             await db.execute("BEGIN")  # Начало транзакции
-             
-#             # Создание таблицы, если она не существует
-#             await db.execute(f"""
-#                 CREATE TABLE IF NOT EXISTS {table_name} (
-#                     Transaction_id TEXT PRIMARY KEY,
-#                     Wallet_id TEXT,
-#                     Amount REAL,
-#                     Btc_block_time_price REAL,
-#                     Block_time INTEGER,
-#                     Block_height INTEGER,
-#                     Block_hash TEXT,
-#                     n INTEGER
-#                 );
-#             """)
-             
-#             # Подготовка данных
-#             data = data.sort_values(by='Block_height').reset_index(drop=True)
-#             data['Transaction_id'] = data['Transaction_id'].astype(str)
-#             data['Wallet_id'] = data['Wallet_id'].astype(str)
-#             data['Amount'] = data['Amount'].astype(float)
-#             data['Btc_block_time_price'] = data['Btc_block_time_price'].astype(float)
-#             data['Block_time'] = data['Block_time'].astype(int)
-#             data['Block_height'] = data['Block_height'].astype(int)
-#             data['Block_hash'] = data['Block_hash'].astype(str)
-#             data['n'] = data['n'].astype(int)
-            
-#             # Преобразование DataFrame в список кортежей для вставки
-#             records = data.to_records(index=False)
-#             records = list(records)
-             
-#             # Формирование списка столбцов
-#             columns = ', '.join(data.columns)
-#             placeholders = ', '.join(['?'] * len(data.columns))
-             
-#             # Вставка данных
-#             await db.executemany(
-#                 f"INSERT OR IGNORE INTO {table_name} ({columns}) VALUES ({placeholders});",
-#                 records
-#             )
-             
-#             await db.commit()  # Фиксация транзакции
-#             logger.info(f"Сохранено {len(records)} записей в таблицу '{table_name}'")
-#     except Exception as e:
-#         logger.error(f"Ошибка при сохранении данных в базу данных: {e}")
-#     finally:
-#         end_time = time.perf_counter()
-#         elapsed_time = end_time - start_time
-#         logger.info(f"Время выполнения async_save_data_to_db: {elapsed_time:.6f} секунд")
-
 
 def print_cicle_info(start_time, min_block_height, max_block_height, len_blocks_group, df, quantity_of_blocks_to_download):
     global avg_cache_vin, avg_hash_for_vin
@@ -986,25 +828,19 @@ def print_cicle_info(start_time, min_block_height, max_block_height, len_blocks_
 
 def get_avg_blocks_in_minut(time_of_circle):
     global avg_times
-    
     avg_times.append(time_of_circle)
-    
     if len(avg_times) > 50:
         avg_times = avg_times[-50:]
-    
     times = 0
     for i in avg_times:
         times += i
     total_avg_time = times / len(avg_times)
-    
     five_times = 0
     for i in avg_times[-5:]:
         five_times += i
-    
     if len(avg_times) > 5:
-        print(f'За последние пять блоков: {round((five_times/5), 2)} блоков/мин')
-        
-    print(f'\n\033[93mСредняя скорость за {len(avg_times)} итераций: {round(total_avg_time, 2)} блоков/мин\033[0m')
+        logger.info(f'За последние пять блоков: {round((five_times/5), 2)} блоков/мин')
+    logger.info(f'\n\033[93mСредняя скорость за {len(avg_times)} итераций: {round(total_avg_time, 2)} блоков/мин\033[0m')
     
 def start_anliz_processes():
     profiler = cProfile.Profile()
