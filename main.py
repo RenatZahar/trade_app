@@ -1,22 +1,16 @@
 # main.py
 # после релиза - собрать requirements.txt (pip freeze > requirements.txt)
-import config
-import sqlite3
-import redis
-import threading
+
 import time
 import os
 import sys
-from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv() #загрузка переменных ПЕРЕД загрузкой моих функций
 
 import main_functions as mf
-from config import BLOCKS_SQL_DATA
-from config import setup_logging
-from modules.redis_init.redis_init import send_message, get_message
-from modules.blockchain_parser import main_parser
-
+from config import BLOCKS_SQL_DATA, setup_logging
+from modules.redis_init.redis_init import get_message
+from modules.finding_price_peaks.get_price_peaks_df import get_peaks
 # можно превратить этот апп в вебприложение - как веб приложение обычно взаимиодействует с бэкэндом
 # cначала запускается тот модуль, который подписывается на канал Redis и ждет сообщений
 # МОЖЕТ СДЕЛАТЬ ДВА РЕЖИМА РАБОТЫ? догоняющий - если отстаем больше чем на 2(?) часа, и рабочий, уже в онлайн режиме расчеты 
@@ -34,13 +28,18 @@ from modules.blockchain_parser import main_parser
 # sqlite3.register_adapter(np.int64, int)
 
 # думаю, надо делать модуль для взаимодействия с БД
-# вывщд с логгер если нужно записать инфу в лог. в остальных - принт
+# вывод с логгер если нужно записать инфу в лог. в остальных - принт
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 PARSER_TEST = 0
 
 if __name__ == "__main__":
    logger = setup_logging(__name__)
    logger.info("Старт main.py")
+   get_peaks()
+
+   #перенести переменные из енв в конфиг (с доставанием их оттуда) 
+
+
    mf.start_redis()
 
    mf.clean_raw_data_and_start_btc_price_updater()
