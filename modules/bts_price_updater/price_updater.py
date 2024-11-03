@@ -1,17 +1,9 @@
 import time
 import requests
 import os
-from dotenv import load_dotenv
-from config import setup_logging
+from config import setup_logging, LINE_TIME_DURATION_MIN
 
-load_dotenv()
 logger = setup_logging(__name__)
-
-LINE_TIME_DURATION_MIN = os.getenv('LINE_TIME_DURATION_MIN')
-LINE_TIME_DURATION_MIN = int(LINE_TIME_DURATION_MIN)
-
-
-
 
 def get_price_data(start_time_ms, end_time_ms):
     logger.info(f"Старт price_updater")

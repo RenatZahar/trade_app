@@ -4,18 +4,14 @@ import pandas as pd
 import gzip
 from datetime import datetime, timedelta
 import os
-from dotenv import load_dotenv
 import sqlite3
-load_dotenv()
 from .price_updater import get_price_data
-from config import setup_logging, RAW_BTC_PRICE_DIR_FILE, CLEARED_PRICES_DIR, BLOCKS_SQL_DATA # type: ignore #переменные подгружаются корректно, проблема в папках
+from config import setup_logging, LINE_TIME_DURATION_MIN, RAW_BTC_PRICE_DIR_FILE, CLEARED_PRICES_DIR, BLOCKS_SQL_DATA # type: ignore #переменные подгружаются корректно, проблема в папках
 from .config import CLEARED_PRICES_NAME_FILE
 import gc
 
 logger = setup_logging(__name__)
 
-LINE_TIME_DURATION_MIN = os.getenv('LINE_TIME_DURATION_MIN')
-LINE_TIME_DURATION_MIN = int(LINE_TIME_DURATION_MIN)
 LINE_TIME_DURATION_SEC = LINE_TIME_DURATION_MIN*60
 
 def clean_gzip_df(df):

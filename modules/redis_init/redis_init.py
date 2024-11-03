@@ -7,12 +7,10 @@ import os
 import redis
 import threading
 import time
-from config import setup_logging
+from config import setup_logging, REDIS_PROCESS_NAME, REDIS_EXECUTABLE_PATH
 
 logger = setup_logging(__name__)
 
-REDIS_PROCESS_NAME = "redis-server.exe"  # Имя процесса Redis для Windows
-REDIS_EXECUTABLE_PATH = os.getenv('REDIS_EXECUTABLE_PATH', 'C:\\Redis\\redis-server.exe')  # Путь к redis-server.exe
 redis_client = None
 
 

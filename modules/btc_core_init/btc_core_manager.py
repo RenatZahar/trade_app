@@ -12,14 +12,9 @@ import requests
 from bitcoinrpc.authproxy import JSONRPCException
 from bitcoinrpc.authproxy import AuthServiceProxy
 
-from config import setup_logging
+from config import setup_logging, rpc_user, rpc_password, rpc_host, rpc_port
 
 logger = setup_logging(__name__)
-
-rpc_user=os.getenv('RPC_USER')
-rpc_password=os.getenv('RPC_PASSWORD')
-rpc_host=os.getenv('RPC_HOST')
-rpc_port=os.getenv('RPC_PORT')
 
 def get_rpc_connection(rpc_user, rpc_password, rpc_host, rpc_port):
     rpc_url = f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}"

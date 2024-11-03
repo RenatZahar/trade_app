@@ -4,17 +4,16 @@ import os
 import time
 import os
 import modules.finding_price_peaks.price_peaks_func as pnt
-from config import setup_logging, BLOCKS_SQL_DATA, CLEARED_PRICES_DIR_FILE, BTC_PRICES_WITH_INTERVALS_FILE
+from config import setup_logging, BLOCKS_SQL_DATA, CLEARED_PRICES_DIR_FILE, BTC_PRICES_WITH_INTERVALS_FILE, LINE_TIME_DURATION_MIN
 from .config import how_much_data_test_after_learning_mounth, cicle, price_diff_pct, plato
-from dotenv import load_dotenv
-load_dotenv()
+
 
 logger = setup_logging(__name__)
 # BASE_DIR = Path(__file__).resolve().parent
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
 
-LINE_TIME_DURATION_MIN = int(os.getenv('LINE_TIME_DURATION_MIN'))
+# LINE_TIME_DURATION_MIN = int(os.getenv('LINE_TIME_DURATION_MIN'))
 # LINE_TIME_DURATION_MIN = os.getenv('LINE_TIME_DURATION_MIN')
 # LINE_TIME_DURATION_MIN = int(LINE_TIME_DURATION_MIN)
 

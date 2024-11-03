@@ -35,7 +35,6 @@ PARSER_TEST = 0
 if __name__ == "__main__":
    logger = setup_logging(__name__)
    logger.info("Старт main.py")
-   get_peaks()
 
    #перенести переменные из енв в конфиг (с доставанием их оттуда) 
 
@@ -43,6 +42,7 @@ if __name__ == "__main__":
    mf.start_redis()
 
    mf.clean_raw_data_and_start_btc_price_updater()
+   get_peaks()
 
    get_message('check_btc_status_line', mf.start_blockchain_parser)
    mf.start_btc_core_monitor()

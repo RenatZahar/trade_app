@@ -13,13 +13,21 @@ import logging
 BASE_DIR = Path(__file__).resolve().parent
 sys.path.append(str(BASE_DIR))
 
-# в конфиге - только пути, не константы
+rpc_user=os.getenv('RPC_USER')
+rpc_password=os.getenv('RPC_PASSWORD')
+rpc_host=os.getenv('RPC_HOST')
+rpc_port=os.getenv('RPC_PORT')
+
+LINE_TIME_DURATION_MIN = int(os.getenv('LINE_TIME_DURATION_MIN'))
+
+REDIS_PROCESS_NAME = "redis-server.exe"  # Имя процесса Redis для Windows
+REDIS_EXECUTABLE_PATH = os.getenv('REDIS_EXECUTABLE_PATH', 'C:\\Redis\\redis-server.exe')  # Путь к redis-server.exe
+
 RAW_BTC_PRICE_DIR_FILE = BASE_DIR / Path(os.getenv('RAW_BTC_PRICE_DIR_FILE', 'data/bitcoin_price/raw_btc_price/BTCUSDT.csv.gz'))
 TXS_PARQUET_DIR = BASE_DIR / Path(os.getenv('TXS_DIR', 'data/blocks_parquet_data'))
 CLEARED_PRICES_DIR = BASE_DIR / Path(os.getenv('CLEARED_PRICES_DIR', 'data/bitcoin_price/cleared_btc_price'))
 CLEARED_PRICES_DIR_FILE = CLEARED_PRICES_DIR / os.listdir(CLEARED_PRICES_DIR)[1]
 BTC_PRICES_WITH_INTERVALS_FILE = BASE_DIR / Path(os.getenv('BTC_PRICES_WITH_INTERVALS_FILE', 'data/bitcoin_price/cleared_btc_price'))
-
 
 BLOCKS_SQL_DATA = Path(os.getenv('BLOCKS_SQL_DATA', 'data/blocks_sql_data/blocks_sql_data_db.db'))
 REDIS_EXECUTABLE_PATH  = os.getenv('REDIS_EXECUTABLE_PATH', 'C:\\Program Files\\Redis\\redis-server.exe')

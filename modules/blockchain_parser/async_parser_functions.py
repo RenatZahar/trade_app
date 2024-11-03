@@ -24,7 +24,7 @@ import time
 import traceback
 import numpy as np
 
-from config import setup_logging, CLEARED_PRICES_DIR # type: ignore #переменные подгружаются корректно, проблема в папках
+from config import setup_logging, CLEARED_PRICES_DIR, rpc_user, rpc_password, rpc_host, rpc_port # type: ignore #переменные подгружаются корректно, проблема в папках
 from .config import (
     REQUESTS_QUANTITY,
     MIN_VALUE_THRESHOLD,
@@ -36,10 +36,6 @@ from .config import (
 sqlite3.register_adapter(np.int32, int)
 sqlite3.register_adapter(np.int64, int)
 
-rpc_user=os.getenv('RPC_USER')
-rpc_password=os.getenv('RPC_PASSWORD')
-rpc_host=os.getenv('RPC_HOST')
-rpc_port=os.getenv('RPC_PORT')
 
 last_request_time = None
 

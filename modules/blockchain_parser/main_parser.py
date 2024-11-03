@@ -9,16 +9,11 @@ from bitcoinrpc.authproxy import AuthServiceProxy
 
 from . import async_parser_functions as apf
 import tests
-from config import setup_logging, BLOCKS_SQL_DATA, CLEARED_PRICES_DIR # type: ignore #переменные подгружаются корректно, проблема в папках
+from config import setup_logging, BLOCKS_SQL_DATA, CLEARED_PRICES_DIR, rpc_user, rpc_password, rpc_host, rpc_port # type: ignore #переменные подгружаются корректно, проблема в папках
 from .config import QUANTITY_OF_BLOCKS_IN_ITERATION, MAX_ITERATIONS, START_BLOCK, PROBLEM_BLOCKS_LIST
 BASE_DIR = Path(__file__).resolve().parent
 
 logger = setup_logging(__name__)
-
-rpc_user=os.getenv('RPC_USER')
-rpc_password=os.getenv('RPC_PASSWORD')
-rpc_host=os.getenv('RPC_HOST')
-rpc_port=os.getenv('RPC_PORT')
 
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
