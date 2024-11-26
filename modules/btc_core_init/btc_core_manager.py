@@ -9,10 +9,12 @@ import os
 import time
 import json
 import requests
+import sqlite3
+
 from bitcoinrpc.authproxy import JSONRPCException
 from bitcoinrpc.authproxy import AuthServiceProxy
 
-from config import setup_logging, rpc_user, rpc_password, rpc_host, rpc_port
+from config import setup_logging, rpc_user, rpc_password, rpc_host, rpc_port, BLOCKS_SQL_DATA
 
 logger = setup_logging(__name__)
 
@@ -23,7 +25,7 @@ def get_rpc_connection(rpc_user, rpc_password, rpc_host, rpc_port):
     return rpc_connection
 
 def get_btc_status(process_name=os.getenv('BITCOIN_CORE_PROCESS_NAME')):  #функция для вызова из main
-    logger.info(f"Старт get_btc_status.")
+    # logger.info(f"Старт get_btc_status.")
     while True:
         try:
             rpc_connection = get_rpc_connection(rpc_user, rpc_password, rpc_host, rpc_port)
@@ -83,5 +85,31 @@ def check_ready_btc_core_for_work(rpc_connection):
                 logger.error(f"Не удалось запустить btc core")
                 logger.error(f'Ошибка при попытке получить статус btc core: {e}')
                 return False
+def get_existing_last_block(db_path):
+    try:
+        with sqlite3.connect(db_path) as db:
+            cursor = db.execute("SELECT MAX(Block_height) FROM data_table;")
+            result = cursor.fetchone()
+            
+            if result and result[0] is not None:
+                last_block = result[0]
+                # logger.info(f"Последний загруженный блок: {last_block}")
+            else:
+                logger.info(f"База данных блоков пуста")
+                last_block = None
+            return last_block
+    except Exception as e:
+        logger.error(f"Ошибка при доступе к базе данных: {e}")
+        return None
 
+def blocks_to_download():
+    global BLOCKS_SQL_DATA
+    rpc_connection = get_rpc_connection(rpc_user, rpc_password, rpc_host, rpc_port)
+    current_block = rpc_connection.getblockcount()
+    last_downloaded_block = get_existing_last_block(BLOCKS_SQL_DATA)
+    if current_block > last_downloaded_block:
+        new_blocks = True
+    else:
+        new_blocks = False
+    return new_blocks
 

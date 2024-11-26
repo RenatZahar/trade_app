@@ -49,7 +49,7 @@ def send_message(channel, message):
         return
     redis_client.publish(channel, message)
 
-def get_message(channel, message_handler):
+def waiting_for_message(channel, message_handler):
     global redis_client
     if redis_client is None:
         logger.error("Redis клиент не инициализирован. Вызовите start_redis_client() перед получением сообщений.")

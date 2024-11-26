@@ -23,6 +23,9 @@ import asyncio
 import time
 import traceback
 import numpy as np
+import sys
+
+from modules.redis_init.redis_init import send_message
 
 from config import setup_logging, CLEARED_PRICES_DIR, rpc_user, rpc_password, rpc_host, rpc_port # type: ignore #переменные подгружаются корректно, проблема в папках
 from .config import (
@@ -337,15 +340,20 @@ async def get_btc_price_of_timestamp(timestamp, btc_price):
 
 def get_list_of_blocks_to_download(biggest_downloaded_block, rpc_connection):
     current_block = rpc_connection.getblockcount()
+    logger.info(f'Последний блок в блокчейне: {current_block}, наибольший загруженный: {biggest_downloaded_block}')
     if current_block > biggest_downloaded_block:
         list_of_blocks_to_download = list(range(biggest_downloaded_block+1,current_block))
-        return(list_of_blocks_to_download)
+        return list_of_blocks_to_download
 
 def split_list_into_chunks(lst, QUANTITY_OF_BLOCKS_IN_ITERATION, MAX_ITERATIONS, blocks_to_remove):
-    logger.info(f'Первый блок для загрузки: {lst[0]}')
-    logger.info(f'Осталось загрузить блоков: {lst[-1]-lst[0]}')
+    
+    if lst:
+        logger.info(f'Первый блок для загрузки: {lst[0]}')
+        logger.info(f'Осталось загрузить блоков: {lst[-1]-lst[0]}')
+    else:
+        return None
     current_iteration = 0
-    while MAX_ITERATIONS != current_iteration:
+    while MAX_ITERATIONS != current_iteration and lst:
         current_iteration += 1
         current_blocks = lst[:QUANTITY_OF_BLOCKS_IN_ITERATION]
         if len(current_blocks) == 1:
@@ -471,21 +479,22 @@ async def async_rpc_connection(rpc_method, height, *args):
             except Exception as e:
                 logger.error(f'Ошибка запроса: {e}, блок {height}')
                 logger.error(f'Попытка {i+1}')
-                logger.error(traceback.format_exc())
+                logger.error(exc_info=True)
                 await asyncio.sleep(10)  # Задержка перед повторной попыткой
 
         logger.error("Не удалось установить соединение после 150 попыток.")
-        exit()
+        raise Exception("Не удалось установить соединение после 150 попыток.")
 
 async def asi_sleep(attempt):
     if attempt > 50 and attempt < 100:
         await asyncio.sleep(10)
     elif attempt >= 100:
-        logger.error('Большая задержка ответа')
+        logger.warning('Большая задержка ответа')
         await asyncio.sleep(30)
     elif attempt == 150:
         logger.error('Exit из async def asi_sleep(attempt)')
-        exit()
+        raise Exception("Выход из async def asi_sleep(attempt)")
+
     else:
         logger.error('Ожидание ответа, asi_sleep(attempt), attempt<50')
         await asyncio.sleep(1)
@@ -690,6 +699,8 @@ async def cleaning_tx_vin_data(index, number, prev_tx_vout_to_current_tx_map, he
         print("\033[31mБОЛЬШАЯ РАЗНИЦА!\033[0m")
     if (vout_to_tx_map_count - len(records))/vout_to_tx_map_count*100 > 20:
         print('\033[31mРазница больше 20 процентов\033[0m')
+        send_message('parser_status', 'completed with error')
+        raise Exception("Разница больше 20 процентов между нужно было загрузить и загружено")
     return records
 
 def get_statistik_data(data):
@@ -796,8 +807,6 @@ async def async_save_data_to_db(data, db_path, table_name='data_table'):
 
     except Exception as e:
         logger.error(f"Ошибка при сохранении данных в базу данных: {e}")
-        traceback.print_exc()
-        # В случае ошибки транзакция будет автоматически откатана при выходе из блока `async with`
     finally:
         end_time = time.perf_counter()
         elapsed_time = end_time - start_time
