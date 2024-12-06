@@ -16,18 +16,14 @@ from modules.btc_core_init.btc_core_manager import get_btc_status, blocks_to_dow
 from modules.blockchain_parser.main_parser  import parser
 from modules.bts_price_updater.raw_prices_cleaning import clean_raw_data
 from modules.redis_init.redis_init import get_redis_status, start_redis_client
-from modules.finding_price_peaks.get_price_peaks_df import get_peaks
+from modules.teach_and_update_models.service_funcs import check_for_new_models
+from modules.teach_and_update_models.teach_models import teach_model
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 logger = setup_logging(__name__)
 
 parser_running = False
 parser_lock = threading.Lock()
-
-
-def start_get_peaks():
-    get_peaks()
-
 
 def start_redis():
     status = get_redis_status()
@@ -37,13 +33,23 @@ def start_redis():
     else:
         logger.error("Не удалось запустить Redis.")
 
-def start_btc_core_monitor():
+def start_btc_price_updater():
+    clean_raw_data()
+    # пока сделал не в отдельном потоке - чтобы пики корректно отработали
+    # clean_raw_data_thread = threading.Thread(target=clean_raw_data)
+    # clean_raw_data_thread.daemon = True
+    # #Демонические потоки завершатся вместе с завершением программы.
+    # #Недемонические потоки заставят программу дождаться их завершения(например, сохранение данных). По умолчанию все потоки недемонические
+    # clean_raw_data_thread.start()
+
+def start_btc_core_monitor_and_parser():
     logger.info("Старт mf.btc_status_monitor")
 
-    waiting_for_message('check_btc_core_status_line', save_btc_core_status)
+    waiting_for_message('check_btc_core_status_line', check_parser_status)
     monitor_thread = threading.Thread(target=btc_status_monitor)
     monitor_thread.daemon = True
     monitor_thread.start()
+
 
 
 # в некоторых случаях парсер отправляет такое сообщение.
@@ -64,7 +70,7 @@ def btc_status_monitor():
             send_message('check_btc_core_status_line', 'btc_core_ready')
         time.sleep(10)
 
-def save_btc_core_status(message):
+def check_parser_status(message):
     global parser_running
     if message == 'btc_core_ready':
         if not parser_running:
@@ -89,16 +95,18 @@ def run_parser_asyncio():
         with parser_lock:
             parser_running = False
 
-# def run_parser():
-#     try:
-#         asyncio.run(parser(PARSER_TEST))
-#     except Exception as e:
-#         logger.error(f"Ошибка в парсере блокчейна: {e}")
+
+def teach_and_update_models():
+    model_type_data, model_type, model_info, model_dir_file = check_for_new_models() #возврат str (json или prl) и model_info или pkl модели
+    if 'json' in model_type_data:
+        logger.info("Найден новый json модели")
+        teach_model(model_type, model_info, model_dir_file)
+
+    elif 'pkl' in model_type_data:
+        logger.info("Найден новый pkl модели") 
+
+        print('Код для использования модели PKL еще не написан. Надо сохранять параметры в папку teached models если буду использовать pkl')
+
+    # start_get_wallets_and_txs_of_peaks()
 
 
-def clean_raw_data_and_start_btc_price_updater():
-    clean_raw_data_thread = threading.Thread(target=clean_raw_data)
-    clean_raw_data_thread.daemon = True
-    #Демонические потоки завершатся вместе с завершением программы.
-    #Недемонические потоки заставят программу дождаться их завершения(например, сохранение данных). По умолчанию все потоки недемонические
-    clean_raw_data_thread.start()

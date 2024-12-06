@@ -4,6 +4,7 @@ from scipy.signal import find_peaks  # type: ignore
 import itertools
 import numpy as np
 import os
+from datetime import datetime, timedelta
 
 pd.set_option("display.expand_frame_repr", False)  # не переносить строки
 pd.set_option("display.max_colwidth", None)
@@ -13,6 +14,20 @@ pd.set_option("display.max_columns", None)
 pd.set_option("display.width", None)
 pd.set_option("display.max_colwidth", None)
 pp = pprint.PrettyPrinter(indent=4)
+
+def get_yesterday_midnight():
+    now = datetime.now()
+
+# Определяем полночь сегодня (обнуление времени)
+    today_midnight = datetime(now.year, now.month, now.day)
+
+# Вычитаем один день, чтобы получить полночь вчерашнего дня
+    yesterday_midnight = today_midnight - timedelta(days=1)
+
+# Преобразуем вчерашнюю полночь в timestamp
+    yesterday_timestamp = int(yesterday_midnight.timestamp())
+    return yesterday_timestamp
+
 
 def def_total_iterations(TRADE_CICLE_MIN_DAYS_MIN_MAX_STEP, MIN_BTC_PRICE_DIFF_PCT_MIN_MAX_STEP, MIN_BTC_PRICE_DIFF_PLATO_MIN_MAX_STEP):
     num_cicle_points = np.arange(*TRADE_CICLE_MIN_DAYS_MIN_MAX_STEP).size

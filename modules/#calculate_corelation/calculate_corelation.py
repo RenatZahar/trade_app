@@ -1,4 +1,4 @@
-# model.py
+# calculate_corelation.py
 
 import os
 import time
@@ -9,8 +9,11 @@ logger = setup_logging(__name__)
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
 
-def modul():
+def calculate_corelation_main():
+    # получаем дф с пиками
     pass
 
+
+
 if __name__ == '__main__':
-    modul()
+    calculate_corelation_main()

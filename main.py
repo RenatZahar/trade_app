@@ -9,7 +9,9 @@ load_dotenv() #загрузка переменных ПЕРЕД загрузко
 
 import main_functions as mf
 from config import BLOCKS_SQL_DATA, setup_logging
-from modules.redis_init.redis_init import waiting_for_message
+from modules.finding_price_peaks.get_price_peaks_df import get_peaks
+
+# from modules.redis_init.redis_init import waiting_for_message
 # cначала запускается тот модуль, который подписывается на канал Redis и ждет сообщений
 
 # что такое ZMQ уведомления
@@ -30,28 +32,45 @@ from modules.redis_init.redis_init import waiting_for_message
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 PARSER_TEST = 0
-
+MAIN_TEST = 1
 if __name__ == "__main__":
    logger = setup_logging(__name__)
    logger.info("Старт main.py")
+   if MAIN_TEST == 1:
 
+      # перенес функции в генерал клас, генерал класс теперь абстрактный. ДАЛЕЕ - СБОР ТРАНЗАКЦИЙ, кошельков, их фильтрация, КОРРЕЛЯЦИЯ, ОБЧЕНИЕ МОДЕЛИ
+      # ЕЕ ТЕСТИРОВАНИЕ, СОХРАНЕНИЕ.
+
+
+
+
+      mf.start_btc_price_updater()
+
+      get_peaks() # обновляем раз в день, за вчеращний день. все обучение крутить до вчерашнего дня (не включая сегодня)
+
+      mf.teach_and_update_models() #запускать в отдельном потоке
+
+      while True:
+         time.sleep(1)
 
  
    mf.start_redis()
 
-   mf.clean_raw_data_and_start_btc_price_updater()
-   mf.start_get_peaks() #надо обернуть все функции для обучения в одну и прогнать их по месячным интервалам
    
-   mf.start_btc_core_monitor()
-        
+   mf.start_btc_core_monitor_and_parser()
+   
+   mf.teach_and_update_models()
+
+     #функция обучения моделей с периодами в полтора месяца, сохранения моделей в одну линейку моделей с разными временными промежутками
+   # data - папка моделей - папка для обучени новой модели (txt с типом модели и ее параметрами)
+   #              |-> название группы моделей - временные рамки модели -  файл (pkl?) модели, txt с ее параметрами, дф с результатами (за больший чем 1,5 месяца период)
+
+   # получаем pkl или txt с параметрами - и запускаем цикл обучения - берем период минус полгода: минус полтора года.....
 
 
 
 
-
-
-
-   # создаем обьект потока - полезно для его управления и контроля is alive. у остальных функций поток внутри main_func - возможно, имеет смысл перенести их в сюда.
+   # у многих функций поток внутри main_func - возможно, имеет смысл перенести их в сюда для контроля
    # перенос новых модулей осуществлять с доработкой под sql
    # решить за какое время хранить данные и сделать модуль для удаления старых. и старых логов
 
