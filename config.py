@@ -17,6 +17,9 @@ rpc_password=os.getenv('RPC_PASSWORD')
 rpc_host=os.getenv('RPC_HOST')
 rpc_port=os.getenv('RPC_PORT')
 
+MIN_TXS_PER_WALLET = int(os.getenv('MIN_TXS_PER_WALLET', 5))
+TOTAL_AMOUNT_MORE_THAN_BTC = float(os.getenv('TOTAL_AMOUNT_MORE_THAN_BTC', 0.05))
+
 LINE_TIME_DURATION_MIN = int(os.getenv('LINE_TIME_DURATION_MIN', 10))
 TRAINED_MODELS_DIR =  BASE_DIR / Path(os.getenv('TRAINED_MODELS_DIR', 'data\\models\\trained_models'))
 REDIS_PROCESS_NAME = "redis-server.exe"  # Имя процесса Redis для Windows
@@ -34,10 +37,11 @@ BLOCKS_SQL_DATA = Path(os.getenv('BLOCKS_SQL_DATA', 'data/blocks_sql_data/blocks
 NEW_MODELS_PATH  = BASE_DIR / Path(os.getenv('NEW_MODELS_PATH', 'data/models/new_models'))
 # BLOCKS_SQL_DATA = BASE_DIR / Path(os.getenv('BLOCKS_SQL_DATA', 'data/blocks_sql_data/blocks_sql_data_db.db'))
 
+BLOCK_HEIGHT_BLOCK_TIME_MAP_DIR_FILE=BASE_DIR /Path(os.getenv('BLOCK_HEIGHT_BLOCK_TIME_MAP_DIR_FILE', 'data/block_height_block_time_map/map.parquet'))
 
+DASK_TEMP_DIR = Path(os.getenv('DASK_TEMP_DIR', 'C:/dask-temp'))
 
 def setup_logging(module_name):
-
     if not os.path.exists(os.path.join(BASE_DIR, 'logs')):
         os.makedirs(os.path.join(BASE_DIR, 'logs'))
 

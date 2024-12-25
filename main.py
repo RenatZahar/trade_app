@@ -9,7 +9,7 @@ load_dotenv() #загрузка переменных ПЕРЕД загрузко
 
 import main_functions as mf
 from config import BLOCKS_SQL_DATA, setup_logging
-from modules.finding_price_peaks.get_price_peaks_df import get_peaks
+from modules.finding_price_peaks.get_price_peaks_df import update_peaks
 
 # from modules.redis_init.redis_init import waiting_for_message
 # cначала запускается тот модуль, который подписывается на канал Redis и ждет сообщений
@@ -36,24 +36,25 @@ MAIN_TEST = 1
 if __name__ == "__main__":
    logger = setup_logging(__name__)
    logger.info("Старт main.py")
+   
    if MAIN_TEST == 1:
-
-      # перенес функции в генерал клас, генерал класс теперь абстрактный. ДАЛЕЕ - СБОР ТРАНЗАКЦИЙ, кошельков, их фильтрация, КОРРЕЛЯЦИЯ, ОБЧЕНИЕ МОДЕЛИ
-      # ЕЕ ТЕСТИРОВАНИЕ, СОХРАНЕНИЕ.
-
-
-
-
       mf.start_btc_price_updater()
-
-      get_peaks() # обновляем раз в день, за вчеращний день. все обучение крутить до вчерашнего дня (не включая сегодня)
-
+      update_peaks() # обновляем раз в день, за вчеращний день. все обучение крутить до вчерашнего дня (не включая сегодня)
       mf.teach_and_update_models() #запускать в отдельном потоке
 
       while True:
          time.sleep(1)
 
- 
+# сохранять транзакции кошельков из даска в бд иначе никак В process_chunk
+# ИЛИ В ДАСКЕ ФОРМИРОВАТЬ СРАЗУ ДФ ДЛЯ ОБУЧЕНИЯ
+# ФОРМИРОВАТЬ КОРРЕЛЯЦИОННЫЙ ВАЛЛЕТ ДФ 
+# А ПОТОМ СОБИРАТЬ ТРАНЗАКЦИИ КОШЕЛЬКОВ ПО ВРЕМЕННЫМ МЕТКАМ
+
+# Существующие индексы в базе:
+# (0, 'idx_block_height', 0, 'c', 0)
+# (1, 'idx_wallet_id', 0, 'c', 0)
+
+
    mf.start_redis()
 
    

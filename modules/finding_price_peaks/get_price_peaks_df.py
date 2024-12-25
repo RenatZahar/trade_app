@@ -12,7 +12,7 @@ logger = setup_logging(__name__)
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
 
-def get_peaks():
+def update_peaks():
     print('сделать раз в день перезапуск get_peaks')
     yesterday_midnight = pnt.get_yesterday_midnight()
     btc_price_data_with_peaks = pd.read_parquet(BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE)

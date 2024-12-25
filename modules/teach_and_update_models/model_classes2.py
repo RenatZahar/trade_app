@@ -13,6 +13,7 @@ import bisect
 import sys
 import math
 import gc
+import json
 import dask.dataframe as dd
 from dask.distributed import Client, LocalCluster
 
@@ -91,16 +92,15 @@ class GeneralModel():
         tmsp = midnight_timestamp-(self.time_parameters['training_data_duration_months']+self.time_parameters['total_testing_period_months'])*how_many_sec_in_month
         return tmsp
 
+    # def create_model_save_dir(self):
+    #     midnight_timestamp = get_yesterday_midnight()
+    #     date_time = datetime.fromtimestamp(midnight_timestamp)
+    #     short_date = date_time.strftime('%Y-%m-%d %H:%M')
+    #     self.model_dir = Path(TRAINED_MODELS_DIR,  f"{self.model_type}_alpha{self.model_parameters['alpha']:.5f}_{self.time_parameters['training_data_duration_months']}-{self.time_parameters['total_testing_period_months']}-{self.time_parameters['model_relevance_period_months']}-date_{short_date}".replace(':', '-').replace(' ', '_'))
+
+
     def train_with_iterations(self):
-        # print(self.time_parameters)
-        midnight_timestamp = get_yesterday_midnight()
-        date_time = datetime.fromtimestamp(midnight_timestamp)
-        short_date = date_time.strftime('%Y-%m-%d %H:%M')
-        # print(midnight_timestamp, ' (', short_date, ')')
-        self.model_dir = Path(TRAINED_MODELS_DIR,  f"{self.model_type}_alpha{self.model_parameters['alpha']:.5f}_{self.time_parameters['training_data_duration_months']}-{self.time_parameters['total_testing_period_months']}-{self.time_parameters['model_relevance_period_months']}-date_{short_date}".replace(':', '-').replace(' ', '_'))
-
         how_many_sec_in_month = 30*24*60*60
-
         how_many_iterations = int(self.time_parameters['total_testing_period_months']/self.time_parameters['model_relevance_period_months'])
         how_many_iterations = max(1, how_many_iterations) 
 
@@ -108,6 +108,7 @@ class GeneralModel():
         new_iteration_tmsp = start_teaching_tmsp
         for iteration in range(how_many_iterations):
             logger.info(f'Start main teaching iteration {iteration+1} of {how_many_iterations}')
+
             cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test  = self.get_corelation_df(new_iteration_tmsp, how_many_sec_in_month)
             self.train_model_specific(cor_data_in_iteration_to_teach)
 
@@ -129,7 +130,7 @@ class GeneralModel():
     def save_model(self, iteration):
         from joblib import dump
         model = self.model
-        
+
         # Сформировать путь к директории модели
         self.model_dir = self.get_model_save_dir(iteration)
         
@@ -146,6 +147,34 @@ class GeneralModel():
         
         print(f"Модель сохранена по пути: {model_path}")
         print(f"DataFrame сохранён по пути: {profit_path}")
+        self.move_init_data()
+
+
+
+    def move_init_data(self):
+        init_file_path = self.init_dir_file
+        if init_file_path:
+            try:
+                # Проверяем, существует ли файл
+                if init_file_path.exists():
+                    with open(init_file_path, 'r', encoding='utf-8') as file:
+                        init_json_data = json.load(file)
+                    # Удаляем файл
+                    init_file_path.unlink()
+                    logger.info(f"Файл {init_file_path} успешно удалён.")
+                else:
+                    logger.warning(f"Файл {init_file_path} не существует и не может быть удалён.")
+
+                trained_model_json_data = init_json_data.copy()
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                trained_model_json_data['model']['train_date'] = timestamp
+                model_param_path = self.model_dir / "params_json.json"
+                with open(model_param_path, 'w') as f:
+                    json.dump(trained_model_json_data, f, indent=4)
+            except Exception as e:
+                logger.error(f"Произошла ошибка при удалении или создании файла: {e}")    
+        else:
+            logger.info('def move_init_data(self).json init file didn"t exist')
 
     def sanitize_filename(self, filename):
         # Заменяем недопустимые символы на дефис
@@ -165,10 +194,11 @@ class GeneralModel():
         )
         # Санитизируем только поддиректорию
         sanitized_subdir_name = self.sanitize_filename(raw_subdir_name)
-        
+        midnight_timestamp = get_yesterday_midnight()
+
         # Строим путь:
-        # TRAINED_MODELS_DIR / "ElasticNet" / "iter_0alpha46.41589_12-6-1.5"
-        return TRAINED_MODELS_DIR / self.model_type / sanitized_subdir_name
+        # TRAINED_MODELS_DIR / "ElasticNet172999999" / "iter_0alpha46.41589_12-6-1.5"
+        return TRAINED_MODELS_DIR / (self.model_type+'_'+midnight_timestamp) / sanitized_subdir_name
 
     def get_corelation_df(self, new_iteration_tmsp, how_many_sec_in_month)  : # -> peaks_data_in_iteration_to_teach, peaks_data_in_iteration_to_profit_test
         # сначала получаем кошельки по точкам пиков
@@ -178,17 +208,16 @@ class GeneralModel():
         # рассчитываем дф для обучения 
         print('________ПРОВЕРИТЬ КАКИЕ СТОЛБЦЫ В ОБУЧАЮЩЕЙ ВЫБОРКЕ')
         iterval_with_peaks_df = self.get_peaks_of_iteration(new_iteration_tmsp)
-
         wallets_of_peaks_list, min_block, max_block = self.get_wallets_of_peaks_list(iterval_with_peaks_df)
-        chunk_size_of_wallets = 3000
-        TEST = 0
+        chunk_size_of_wallets = 900
+        TEST = 1
         if TEST:
             wallets_of_peaks_list = wallets_of_peaks_list[:chunk_size_of_wallets*50]
+            
         chunks_list = get_chunks_of_wallets(wallets_of_peaks_list, chunk_size_of_wallets)
 
         dask_client = get_dask_client()
         all_wallets_corelation_ddf, all_txs_of_wallets_ddf = get_corelation_of_wallets_df_with_dask(chunks_list, min_block, max_block)
-
         cor_data_in_iteration_to_teach_df = get_data_for_teach_with_dask(iterval_with_peaks_df, all_txs_of_wallets_ddf, all_wallets_corelation_ddf)
 
         start_test_profit_tmsp = iterval_with_peaks_df['Timestamp'].iloc[-1]
@@ -250,9 +279,7 @@ class GeneralModel():
         blocks_of_intervals = get_blocks_of_intervals(list_intervals)
         min_block = min(blocks_of_intervals)
         max_block = max(blocks_of_intervals)
-
         uniq_wallets_of_blocks = get_uniq_wallets_of_blocks(blocks_of_intervals)
-
         return uniq_wallets_of_blocks, min_block, max_block
 
     def load(self, path):
@@ -304,10 +331,9 @@ class ElasticNetModel(GeneralModel):
             y_pred = np.zeros_like(y_pred_continuous)  # Инициализируем массив предсказаний
             y_pred[y_pred_continuous > threshold] = 1  # возможно, можно сохранить не приведенный к 1 или -1 threshold?
             y_pred[y_pred_continuous < -threshold] = -1
-            # print(y_pred)
-            # f1_weighted_fold_scores.append(f1_score(y_test, y_pred, average='weighted'))
-            # precision_fold_scores.append(precision_score(y_test, y_pred, average='weighted'))
-            # recall_fold_scores.append(recall_score(y_test, y_pred, average='weighted'))
+            print(y_pred)
+            print('ДОПИСАТЬ СРАВНЕНИЕ ВСЕХ МОДЕЛЕЙ И ПЕРЕОБУЧЕНИЯ ЛУЧШЕЙ')
+            #сохранять копии модели в список, сохранять их результаты. потом брать лучшую
             self.model = model
 
 def get_txs_of_wallets_by_tmsp(wallets_chunk, start_test_profit_tmsp, last_test_profit_tmsp, table_name='data_table'):
@@ -731,6 +757,7 @@ def get_blocks_of_intervals(intervals, table_name='data_table'):
             'block_times': block_times
         })
         df.to_parquet(BLOCK_HEIGHT_BLOCK_TIME_MAP_DIR_FILE)
+        logger.info('Новый BLOCK_HEIGHT_BLOCK_TIME_MAP_DIR_FILE сохранен')
     # Теперь, имея полную карту (Block_height -> Block_time),
     # определим, какие блоки попадают в заданные интервалы времени.
     all_blocks = []
@@ -753,7 +780,7 @@ def get_uniq_wallets_of_blocks(block_list, table_name='data_table'):
         db_path = str(db_path)
 
     unique_wallets = set()
-    chunk_size = 999  # Уменьшенный размер чанка для безопасности
+    chunk_size = 900  # Уменьшенный размер чанка для безопасности
 
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
@@ -783,6 +810,7 @@ def get_corelation_of_wallets_df_with_dask(chunks_list, min_block, max_block):
     logger.info('ПОЗДНЕЕ ПРОВЕРИТЬ КАК ПОКАЗЫВАЕ СЕБЯ ДЕЛЕНИЕ В ЭТОЙ ХАРАКТЕРИСТИКЕ. ПРИ УМНОЖЕНИИ - УСИЛИВАЕМ ВНИМАНИЕ ОТ КОЛ-ВА ТРАНЗАКЦИЙ. МБ НАДО ДЕЛАТЬ ТАК')
     logger.info("weighted_sell_correlation = (correlation_df['Normalized_sell_amount_in_sell_interval'] * correlation_df['sell_txs_qnty']).sum() / correlation_df['sell_txs_qnty'].sum()")
     logger.info('ПРОВЕРИТЬ ПОТОМ ПРИВЕДЕНИЕ ЗНАЧЕНИЙ К ДИАПАЗОНУ ОТ -1 ДО 1')
+    print('забить npartitions от размера а не от кол-ва')
     # Функция обработки одного чанка
     peaks_data = get_peaks_df()
     npartitions = 500
@@ -811,13 +839,13 @@ def get_corelation_of_wallets_df_with_dask(chunks_list, min_block, max_block):
         gc.collect()
         return correlation_wallets_df, txs_of_chunk_with_intervals
 
-#   НАВЕРНО ТУТ ЗАПИСЫВАТЬ TXS DF В БЖ
-# И ТОГДА МОЖНО СДЕЛАТЬ МНОГО ВОРКЕРОВ ПО ДВА ПОТОКА
-# сохранять транзакции кошельков из даска в бд иначе никак В process_chunk
-# ИЛИ В ДАСКЕ ФОРМИРОВАТЬ СРАЗУ ДФ ДЛЯ ОБУЧЕНИЯ
-# ФОРМИРОВАТЬ КОРРЕЛЯЦИОННЫЙ ВАЛЛЕТ ДФ 
-# А ПОТОМ СОБИРАТЬ ТРАНЗАКЦИИ КОШЕЛЬКОВ ПО ВРЕМЕННЫМ МЕТКАМ
-# calculate_correlations_of_wallets_optimized
+    #   НАВЕРНО ТУТ ЗАПИСЫВАТЬ TXS DF В БЖ
+    # И ТОГДА МОЖНО СДЕЛАТЬ МНОГО ВОРКЕРОВ ПО ДВА ПОТОКА
+    # сохранять транзакции кошельков из даска в бд иначе никак В process_chunk
+    # ИЛИ В ДАСКЕ ФОРМИРОВАТЬ СРАЗУ ДФ ДЛЯ ОБУЧЕНИЯ
+    # ФОРМИРОВАТЬ КОРРЕЛЯЦИОННЫЙ ВАЛЛЕТ ДФ 
+    # А ПОТОМ СОБИРАТЬ ТРАНЗАКЦИИ КОШЕЛЬКОВ ПО ВРЕМЕННЫМ МЕТКАМ
+    # calculate_correlations_of_wallets_optimized
 
     # Создаём список delayed вызовов для всех чанков
     delayed_results = [process_chunk(chunk) for chunk in chunks_list]
@@ -853,7 +881,7 @@ def get_corelation_of_wallets_df(wallets_list, min_block, max_block):
     #     рассчитываем и записываем кореляцию
     # ретерн кореляция КОШЕЛЬКОВ дф
 
-    chunk_size_of_wallets = 30000
+    chunk_size_of_wallets = 900
     chunks_list = get_chunks_of_wallets(wallets_list, chunk_size_of_wallets)
 
 
@@ -1209,7 +1237,7 @@ def get_txs_of_wallets_list(wallet_list, min_block, max_block, table_name='data_
         logger.warning("Empty wallet_list provided.")
         return pd.DataFrame()
 
-    chunk_size = 500  # Уменьшенный размер чанка для безопасности (SQLite имеет ограничение на количество параметров, обычно 999)
+    chunk_size = 900  # Уменьшенный размер чанка для безопасности (SQLite имеет ограничение на количество параметров, обычно 999)
     frames = []
 
     with sqlite3.connect(db_path) as conn:

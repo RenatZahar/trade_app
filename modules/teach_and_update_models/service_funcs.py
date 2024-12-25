@@ -32,29 +32,6 @@ def check_for_new_models():
         if file.suffix == '.pkl':
             return 'pkl', None, None, None
 
-def del_json_from_new_models_and_create_new(model):
-    init_file_path = Path(model.init_dir_file)
-    try:
-        # Проверяем, существует ли файл
-        if init_file_path.exists():
-            with open(init_file_path, 'r', encoding='utf-8') as file:
-                init_json_data = json.load(file)
-            # Удаляем файл
-            init_file_path.unlink()
-            logger.info(f"Файл {init_file_path} успешно удалён.")
-        else:
-            logger.warning(f"Файл {init_file_path} не существует и не может быть удалён.")
-
-        trained_model_json_data = init_json_data.copy()
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        trained_model_json_data['model']['train_date'] = timestamp
-        trained_model_json_data_path = Path(model.model_dir) / f'{model.model_type}_params.json'
-        with open(trained_model_json_data_path, 'w') as f:
-            json.dump(trained_model_json_data, f, indent=4)
-    except Exception as e:
-        logger.error(f"Произошла ошибка при удалении или создании файла: {e}")    
-
-
 def get_peaks_df():
     df = pd.read_parquet(BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE)
     return df
