@@ -17,28 +17,21 @@ pp = pprint.PrettyPrinter(indent=4)
 
 def get_yesterday_midnight():
     now = datetime.now()
-
-# Определяем полночь сегодня (обнуление времени)
     today_midnight = datetime(now.year, now.month, now.day)
-
-# Вычитаем один день, чтобы получить полночь вчерашнего дня
     yesterday_midnight = today_midnight - timedelta(days=1)
-
-# Преобразуем вчерашнюю полночь в timestamp
     yesterday_timestamp = int(yesterday_midnight.timestamp())
     return yesterday_timestamp
 
 
-def def_total_iterations(TRADE_CICLE_MIN_DAYS_MIN_MAX_STEP, MIN_BTC_PRICE_DIFF_PCT_MIN_MAX_STEP, MIN_BTC_PRICE_DIFF_PLATO_MIN_MAX_STEP):
-    num_cicle_points = np.arange(*TRADE_CICLE_MIN_DAYS_MIN_MAX_STEP).size
-    num_price_diff_points = np.arange(*MIN_BTC_PRICE_DIFF_PCT_MIN_MAX_STEP).size
-    num_plato_points = np.arange(*MIN_BTC_PRICE_DIFF_PLATO_MIN_MAX_STEP).size
-    total_iterations = num_cicle_points * num_price_diff_points * num_plato_points
-    return total_iterations
+# def def_total_iterations(TRADE_CICLE_MIN_DAYS_MIN_MAX_STEP, MIN_BTC_PRICE_DIFF_PCT_MIN_MAX_STEP, MIN_BTC_PRICE_DIFF_PLATO_MIN_MAX_STEP):
+#     num_cicle_points = np.arange(*TRADE_CICLE_MIN_DAYS_MIN_MAX_STEP).size
+#     num_price_diff_points = np.arange(*MIN_BTC_PRICE_DIFF_PCT_MIN_MAX_STEP).size
+#     num_plato_points = np.arange(*MIN_BTC_PRICE_DIFF_PLATO_MIN_MAX_STEP).size
+#     total_iterations = num_cicle_points * num_price_diff_points * num_plato_points
+#     return total_iterations
 
 def get_btc_prices(CLEARED_PRICES_DIR_FILE):
     btc_price_df = pd.read_parquet(CLEARED_PRICES_DIR_FILE)
-    btc_price_df["Buy"], btc_price_df["Sell"] = 0, 0
     return btc_price_df
 
 def analyze_with_parameters(btc_price_df, cicle, price_diff_pct, plato, SMA_MIN):
@@ -47,7 +40,6 @@ def analyze_with_parameters(btc_price_df, cicle, price_diff_pct, plato, SMA_MIN)
 
     for index, peak in enumerate(peaks): 
         btc_price_df.loc[peak, "Sell"] = 1
-        # btc_price_df.at[index, 'Sell'] = 1
 
     for i in range(1, len(peaks)):
     # Получаем интервал между двумя пиками
@@ -60,19 +52,12 @@ def analyze_with_parameters(btc_price_df, cicle, price_diff_pct, plato, SMA_MIN)
 
         # Проверяем разницу в цене только со вторым пиком
         if abs(btc_price_df.iloc[end_peak]['Price'] - min_price) / min_price * 100 >= price_diff_pct:
-            # Если условие выполняется, то точка с минимальной ценой - потенциальная точка для покупки
             potential_buy_points = interval[(interval['Price'] >= min_price) &
                                             (interval['Price'] <= min_price * (1 + plato / 100))]
-            # Устанавливаем метку Buy для этих точек
             btc_price_df.loc[potential_buy_points.index, 'Buy'] = 1
 
-    # print('identify_trade_intervals')
     btc_price_df = identify_trade_intervals(btc_price_df)
-    # print(btc_price_df)
-
-    # print('identify_more_sells')
     btc_price_df = identify_more_sells(btc_price_df, plato)
-    # print(btc_price_df)
     return btc_price_df
 
 def identify_more_sells(btc_price_df, plato):
@@ -144,42 +129,38 @@ def identify_trade_intervals(btc_price_df):
         in_interval = False
         last_sell_index = None
 
-    # print(btc_price_df)  
     btc_price_df = btc_price_df.reset_index(drop=True)
     
     del trade_points
     return btc_price_df
 
-
-
-
-def calculate_profit(btc_price_df):
-    trade_points = btc_price_df.copy()
-    trade_points = trade_points.loc[(trade_points['End_interval']!=0) | (trade_points['Start_interval']!=0)]
-    index_pairs = [(trade_points.index[i], trade_points.index[i+1]) for i in range(0, len(trade_points.index) - 1, 2)]
-    dollars = 1000
-    btc = 0 
-    sum_avg = 0
-    commision_proc = 0.001
-    for i, k in index_pairs:
-        interval = btc_price_df.iloc[i:k+1]
-        buy_prices = pd.Series([interval['Price'].iloc[i] for i in range(len(interval)) if interval['Buy'].iloc[i] == 1])
-        avg_buy_price = buy_prices.mean()
-        sell_prices = pd.Series([interval['Price'].iloc[i] for i in range(len(interval)) if interval['Sell'].iloc[i] == 1])
-        avg_sell_price = sell_prices.mean()
-        sum_avg += avg_sell_price - avg_buy_price
+# def calculate_profit(btc_price_df):
+#     trade_points = btc_price_df.copy()
+#     trade_points = trade_points.loc[(trade_points['End_interval']!=0) | (trade_points['Start_interval']!=0)]
+#     index_pairs = [(trade_points.index[i], trade_points.index[i+1]) for i in range(0, len(trade_points.index) - 1, 2)]
+#     dollars = 1000
+#     btc = 0 
+#     sum_avg = 0
+#     commision_proc = 0.001
+#     for i, k in index_pairs:
+#         interval = btc_price_df.iloc[i:k+1]
+#         buy_prices = pd.Series([interval['Price'].iloc[i] for i in range(len(interval)) if interval['Buy'].iloc[i] == 1])
+#         avg_buy_price = buy_prices.mean()
+#         sell_prices = pd.Series([interval['Price'].iloc[i] for i in range(len(interval)) if interval['Sell'].iloc[i] == 1])
+#         avg_sell_price = sell_prices.mean()
+#         sum_avg += avg_sell_price - avg_buy_price
         
-        btc = dollars/avg_buy_price
-        btc = btc-btc*commision_proc
-        dollars = 0
-        dollars = btc*avg_sell_price
-        dollars = dollars-dollars*commision_proc
-        btc = 0
+#         btc = dollars/avg_buy_price
+#         btc = btc-btc*commision_proc
+#         dollars = 0
+#         dollars = btc*avg_sell_price
+#         dollars = dollars-dollars*commision_proc
+#         btc = 0
 
-    if btc != 0:
-        dollars += btc*sell_prices
-        btc = 0
-    return dollars, sum_avg
+#     if btc != 0:
+#         dollars += btc*sell_prices
+#         btc = 0
+#     return dollars, sum_avg
 
 def split_btc_prices(btc_price_df, how_much_data_test_after_learning_mounth):
     last_date = btc_price_df['Human_time'].max()

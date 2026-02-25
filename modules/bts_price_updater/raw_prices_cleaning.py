@@ -6,8 +6,7 @@ from datetime import datetime, timedelta
 import os
 import sqlite3
 from .price_updater import get_price_data
-from config import setup_logging, LINE_TIME_DURATION_MIN, RAW_BTC_PRICE_DIR_FILE, CLEARED_PRICES_DIR, BLOCKS_SQL_DATA # type: ignore #переменные подгружаются корректно, проблема в папках
-from .config import CLEARED_PRICES_NAME_FILE
+from config import setup_logging, LINE_TIME_DURATION_MIN, RAW_BTC_PRICE_DIR_FILE, CLEARED_PRICES_DIR, BLOCKS_SQL_DATA, CLEARED_PRICES_NAME_FILE # type: ignore #переменные подгружаются корректно, проблема в папках
 import gc
 
 logger = setup_logging(__name__)
@@ -31,7 +30,6 @@ def clean_gzip_df(df):
     df = df.reset_index(drop=True)
     df.drop([0], axis=0, inplace=True)
     df = df.reset_index(drop=True)
-    # print(df.head())
 
     return df
 
@@ -55,7 +53,7 @@ def clean_downloaded_df(data):
    
     resampled_data = price_data_df['Price'].resample(f'{LINE_TIME_DURATION_MIN}T').mean().reset_index()
 
-    resampled_data['Timestamp'] = resampled_data['Open time'].astype(int) // 10**9
+    resampled_data['Timestamp'] = resampled_data['Open time'].astype('int64') // 10**9
 
     resampled_data = resampled_data[['Timestamp', 'Price']]
     # print(resampled_data.head())
@@ -120,22 +118,15 @@ def clean_raw_data():
     
     end_work_time = time.time()
     logger.info(f"Завершение get_price_data. Время выполнения: {(end_work_time-start_work_time):.1f} секунд")
-    # print(downloaded_price_data[:5])
-    downloaded_price_data = clean_downloaded_df(downloaded_price_data)
-    # print(downloaded_price_data.head())
-    
+    downloaded_price_data = clean_downloaded_df(downloaded_price_data)    
     btc_price_data = pd.concat([btc_price_data, downloaded_price_data], ignore_index=True)
 
     # Удаляем дубликаты и сортируем
     btc_price_data.drop_duplicates(subset='Timestamp', inplace=True)
     btc_price_data.sort_values('Timestamp', inplace=True)
     btc_price_data.reset_index(drop=True, inplace=True)
-
     btc_price_data['Human_time'] = pd.to_datetime(btc_price_data['Timestamp'], unit='s')
 
-    # print(btc_price_data.head())
-    logger.info('btc_price_data.tail(3)')
-    logger.info(f'\n{btc_price_data.tail(3)}')
     current_time = time.time()
     human_readable_time = datetime.fromtimestamp(current_time).strftime('%Y-%m-%d %H:%M:%S')
     logger.info(f'current time {current_time} ({human_readable_time})')

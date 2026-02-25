@@ -1,7 +1,7 @@
 import time
 import requests
 import os
-from config import setup_logging, LINE_TIME_DURATION_MIN
+from config import setup_logging
 
 logger = setup_logging(__name__)
 

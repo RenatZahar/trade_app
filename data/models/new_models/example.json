@@ -1,1 +1,0 @@
-{"model":{"type":"ElasticNet", "model_param":{"alpha": 46.41588833612773, "l1_ratio": 0.0, "threshold":0.470588}, "time_param":{"training_data_duration_months":12, "model_relevance_period_months":1.5, "total_testing_period_months":6}, "comment":"Первая модель с лучшими результатами с проверки гипотезы, test rent - 17%/month"}}

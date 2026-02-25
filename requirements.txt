@@ -1,7 +1,7 @@
-команда 
-pip freeze > requirements.txt
-но перед этим -создание отдельного окружения для проекта
+# команда 
+# pip freeze > requirements.txt
+# но перед этим -создание отдельного окружения для проекта
 
 
-установка зависимостей - pip install -r requirements.txt
+# установка зависимостей - pip install -r requirements.txt
 # в app_project\data\bitcoin_price\raw_btc_price закинуть https://www.cryptoarchive.com.au/bars/BTCUSDT

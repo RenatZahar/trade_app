@@ -9,7 +9,7 @@ from bitcoinrpc.authproxy import AuthServiceProxy
 from modules.redis_init.redis_init import send_message
 
 from . import async_parser_functions as apf
-import tests
+# import tests
 from config import setup_logging, BLOCKS_SQL_DATA, CLEARED_PRICES_DIR, rpc_user, rpc_password, rpc_host, rpc_port # type: ignore #переменные подгружаются корректно, проблема в папках
 from .config import QUANTITY_OF_BLOCKS_IN_ITERATION, MAX_ITERATIONS, START_BLOCK, PROBLEM_BLOCKS_LIST
 BASE_DIR = Path(__file__).resolve().parent
@@ -22,7 +22,7 @@ pd.set_option('display.max_colwidth', None)
 pd.set_option('display.precision', 2)
 pd.set_option('display.expand_frame_repr', False)
 
-print('main_parser.py. убрать кол-во итераций, при скачивании последнего актуального блока - предусмотреть сценарий запуска парсера при появлении нового блока')
+# print('main_parser.py. убрать кол-во итераций, при скачивании последнего актуального блока - предусмотреть сценарий запуска парсера при появлении нового блока')
 # можно через вызов функции сдедать режим на рабочий процесс без кэша (типа если тру - MAX_LINES_IN_TX_CACHE = 0)
 # перенести функции обслуживания бд (в начале async_parser_functions) в отдельный модуль
 # сохранение кэша в файл не используется в данной версии (async_save_cache_to_file)
@@ -64,12 +64,12 @@ async def parser(PARSER_TEST):
                 time_of_circle = apf.print_cicle_info(start_time, min_block_height, max_block_height , len(blocks_group), data, QUANTITY_OF_BLOCKS_IN_ITERATION) # type: ignore
                 apf.get_avg_blocks_in_minut(time_of_circle)
 
-                if PARSER_TEST:
-                    print('start tests')
-                    tests.fetch_last_five_rows(BLOCKS_SQL_DATA)
-                    await asyncio.gather(*tasks)
-                    print('end tests')
-                    return
+                # if PARSER_TEST:
+                #     print('start tests')
+                #     tests.fetch_last_five_rows(BLOCKS_SQL_DATA)
+                #     await asyncio.gather(*tasks)
+                #     print('end tests')
+                #     return
 
                 # ожидаем явное завершение всех задач в tasks! но можно  использовать семафор
                 # пока оставил, чтобы сохранить в дб порядок по блокам. мб это не нужно

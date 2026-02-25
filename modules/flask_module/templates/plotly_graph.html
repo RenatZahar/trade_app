@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Визуализация Parquet файлов</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .form-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .input-field {
+            width: 80%;
+            padding: 10px;
+            margin-right: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .column-select {
+            margin: 20px 0;
+            padding: 10px;
+            width: 200px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .submit-button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .submit-button:hover {
+            background-color: #45a049;
+        }
+        .columns-info {
+            background-color: white;
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .flash-messages {
+            color: #721c24;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            padding: 12px 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .plot-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <form method="POST">
+            <input type="text" name="file_path" 
+                   placeholder="Введите путь к .parquet файлу" 
+                   class="input-field" required 
+                   value="{{ request.form['file_path'] if request.form['file_path'] else '' }}">
+            
+                   {% if columns_info %}
+                   <select name="selected_column1" class="column-select" required>
+                       <option value="">Выберите первый столбец для визуализации</option>
+                       {% for column in columns_info['names'] %}
+                       <option value="{{ column }}" {% if selected_column1 == column %}selected{% endif %}>
+                           {{ column }}
+                       </option>
+                       {% endfor %}
+                   </select>
+                   
+                   <select name="selected_column2" class="column-select" required>
+                       <option value="">Выберите второй столбец для визуализации</option>
+                       {% for column in columns_info['names'] %}
+                       <option value="{{ column }}" {% if selected_column2 == column %}selected{% endif %}>
+                           {{ column }}
+                       </option>
+                       {% endfor %}
+                   </select>
+                   {% endif %}
+            
+            <button type="submit" class="submit-button">Построить график</button>
+        </form>
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <div class="flash-messages">
+                {% for message in messages %}
+                    <p>{{ message }}</p>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    {% if columns_info %}
+        <div class="columns-info">
+            <h3>Информация о колонках:</h3>
+            <table>
+                <tr>
+                    <th>Название</th>
+                    <th>Тип данных</th>
+                    <th>Количество не-null значений</th>
+                    <th>Пример значения</th>
+                </tr>
+                {% for i in range(columns_info['names']|length) %}
+                <tr>
+                    <td>{{ columns_info['names'][i] }}</td>
+                    <td>{{ columns_info['dtypes'][i] }}</td>
+                    <td>{{ columns_info['non_null_counts'][i] }}</td>
+                    <td>{{ columns_info['sample_values'][i] }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    {% endif %}
+
+    {% if plot_div %}
+        <div class="plot-container">
+            {{ plot_div|safe }}
+        </div>
+    {% endif %}
+</body>
+</html>

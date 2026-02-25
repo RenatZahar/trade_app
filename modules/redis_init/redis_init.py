@@ -46,6 +46,8 @@ def send_message(channel, message):
     global redis_client
     if redis_client is None:
         logger.error("Redis клиент не инициализирован. Вызовите start_redis_client() перед отправкой сообщений.")
+        logger.error('cначала запускается тот модуль, который подписывается на канал Redis и ждет сообщений')
+
         return
     redis_client.publish(channel, message)
 
@@ -53,6 +55,7 @@ def waiting_for_message(channel, message_handler):
     global redis_client
     if redis_client is None:
         logger.error("Redis клиент не инициализирован. Вызовите start_redis_client() перед получением сообщений.")
+
         return
 
     def listen():
