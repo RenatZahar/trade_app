@@ -1,7 +1,32 @@
-# команда 
-# pip freeze > requirements.txt
-# но перед этим -создание отдельного окружения для проекта
+# Runtime dependencies for the project.
+# Recommended flow on Windows 11 + VSCode terminal:
+#   py -3.11 -m venv .venv
+#   .\.venv\Scripts\Activate.ps1
+#   python -m pip install --upgrade pip
+#   pip install -r requirements.txt
+#
+# How to refresh this file automatically later:
+# 1) From a CLEAN project venv after successful run/tests:
+#      pip freeze > requirements.lock.txt
+#    (full pin, reproducible but verbose)
+# 2) For a minimal import-based draft:
+#      pip install pipreqs
+#      pipreqs . --force
+#    (can miss optional/runtime-only deps, so review manually)
 
-
-# установка зависимостей - pip install -r requirements.txt
-# в app_project\data\bitcoin_price\raw_btc_price закинуть https://www.cryptoarchive.com.au/bars/BTCUSDT
+python-dotenv
+pandas
+numpy
+scipy
+scikit-learn
+joblib
+dask[distributed]
+flask
+plotly
+requests
+redis
+psutil
+aiosqlite
+python-bitcoinrpc
+colorama
+pyarrow

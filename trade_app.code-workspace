@@ -1,0 +1,71 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+    "python.envFile": "${workspaceFolder}/.env",
+    "python.terminal.activateEnvironment": true,
+    "terminal.integrated.cwd": "${workspaceFolder}",
+    "terminal.integrated.defaultProfile.windows": "PowerShell",
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/*.pyc": true,
+      "project_clean.zip": true
+    },
+    "search.exclude": {
+      "data/models/trained_models": true,
+      "data/blocks_parquet_data": true,
+      "project_clean.zip": true
+    },
+    "python.analysis.exclude": [
+      "data/models/trained_models",
+      "data/blocks_parquet_data"
+    ],
+    "python.analysis.extraPaths": [
+      "${workspaceFolder}",
+      "${workspaceFolder}/modules"
+    ]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "check: python version",
+        "type": "shell",
+        "command": "python --version",
+        "problemMatcher": []
+      },
+      {
+        "label": "run: main.py",
+        "type": "shell",
+        "command": "python main.py",
+        "group": "build",
+        "problemMatcher": []
+      },
+      {
+        "label": "run: module tests script",
+        "type": "shell",
+        "command": "python -m modules.tests.tests_utils_funcs",
+        "group": "test",
+        "problemMatcher": []
+      }
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Python: main.py",
+        "type": "python",
+        "request": "launch",
+        "program": "${workspaceFolder}/main.py",
+        "cwd": "${workspaceFolder}",
+        "console": "integratedTerminal",
+        "envFile": "${workspaceFolder}/.env"
+      }
+    ]
+  }
+}
