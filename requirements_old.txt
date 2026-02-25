@@ -1,5 +1,5 @@
 # команда 
-# pip freeze > requirements.txt
+# I:\my_python\Traider_bot\app_project> pip freeze > requirements.lock.txt
 # но перед этим -создание отдельного окружения для проекта
 
 
