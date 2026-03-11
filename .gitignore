@@ -6,7 +6,7 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Ignore environments
+# Ignore environments (точно ли надо не выгружать окружение?)
 myenv/
 venv/
 env/
@@ -36,6 +36,7 @@ Thumbs.db
 *.db-shm
 *.db-wal
 *.json
-
+*.zip
+*.png
 
 data_operations.py
