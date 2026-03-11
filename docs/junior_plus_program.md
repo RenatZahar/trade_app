@@ -234,3 +234,41 @@ rg --files | rg 'docs/junior_plus_program\.md'
 ```
 
 > Примечание: этот файл — про учебную программу. Детали разовой настройки Git/SSH специально не держим здесь, чтобы не размывать фокус.
+
+
+### Рабочий протокол веток (договор)
+
+- Базовая стабильная ветка: `main_branch`.
+- Рабочая ветка текущей итерации: `feature/iteration-01-cli` (долгоживущая на время итерации).
+- Временные ветки `codex/*` не используем как основное место разработки; после завершения работы их удаляем локально и на `origin`.
+
+Рекомендуемый цикл:
+
+```bash
+git switch main_branch
+git pull
+git switch feature/iteration-01-cli
+git pull
+# работа, коммиты
+git push
+```
+
+Завершение итерации:
+
+```bash
+git switch main_branch
+git pull
+git merge --no-ff feature/iteration-01-cli
+# smoke checks
+git push
+```
+
+### Быстрый протокол безопасной синхронизации (если есть локальные правки и ветка behind)
+
+```bash
+git stash push -u -m "wip before sync"
+git pull --rebase origin <branch>
+git stash pop
+```
+
+После `stash pop` обязательно проверить `git status` и разрешить конфликты, если они появились.
