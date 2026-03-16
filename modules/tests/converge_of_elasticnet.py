@@ -25,9 +25,7 @@ os.chdir(script_dir)
     # дерево решений, лес решений, пни решений, градиент бустинг модел чтобы это не значило, sklearn.linear_model.Ridge/RidgeCV
  
 
-def converge_of_elasticnet(TESTS_FROM_MODULES, tmps=None, correlation_type=None):
-    if not TESTS_FROM_MODULES:
-        return
+def converge_of_elasticnet(tmps=None, correlation_type=None):
     logger.info("\033[34mStart converge_of_elasticnet\033[0m")
     dask_client = get_dask_client()
     # check_for_temp_data_available() дописать функцию по копированию дата? скорее всего не понадобится
