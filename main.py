@@ -4,6 +4,7 @@ Operational notes and backlog for this file were moved to:
 - docs/main_notes.md
 """
 
+import argparse
 import os
 import sys
 import time
@@ -22,17 +23,35 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 PARSER_TEST = 0
 FLASK_TEST = 0
 MAIN_TEST = 0
-TEACHING_TEST = 0  # 1 or 0.1
+TEACHING_TEST = 0 # 1 or 0.1
 TESTS_FROM_MODULES = 0
 PARAM_GRID_TESTING = 0
 MOVE_TXS = 0
 
 
+def run_parser():
+    mf.start_btc_core_monitor_and_parser()
+
+def parse_args() -> argparse.Namespace:
+    # -h и --help автоматически создаются тут и заполняются из help в других аргументах
+    parser = argparse.ArgumentParser(description="Unified entrypoint for trade_app")
+    parser.add_argument("-p", "--start_parser", action="store_true", help="Старт парсера блокчейна")
+    return parser.parse_args()ц
+
 if __name__ == "__main__":
     logger = setup_logging(__name__)
     logger.info("Старт main.py")
 
-    converge_of_elasticnet(TESTS_FROM_MODULES)
+    args = parse_args()
+    if args.mode == "blockchain_parser":
+        run_parser()
+
+    if args.start_parser:
+        run_parser()
+        raise SystemExit(0)
+    # ниже - старый код, старт скрипта через флаги, сейчас флаги == 0
+    if TESTS_FROM_MODULES:
+        converge_of_elasticnet()
 
     if MOVE_TXS:
         moving_txs()
@@ -52,3 +71,6 @@ if __name__ == "__main__":
     print("main.py отработал, далее time.sleep(20)")
     while True:
         time.sleep(20)
+
+
+
