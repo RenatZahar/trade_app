@@ -5,7 +5,8 @@ import time
 import pandas as pd
 import dask.dataframe as dd
 from .tests_utils_funcs import save_parquet
-from config import setup_logging, BLOCKS_SQL_DATA, APP_TEMP_DIR
+from config import BLOCKS_SQL_DATA, APP_TEMP_DIR
+from modules.logger.logger import setup_logging
 from modules.teach_and_update_models.data_operations import get_data_for_teach_with_dask, clean_data
 from modules.dask_client_init.get_dask_client import get_dask_client, close_dask_client
 

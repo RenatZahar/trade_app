@@ -6,7 +6,8 @@ from datetime import datetime, timedelta
 import os
 import sqlite3
 from .price_updater import get_price_data
-from config import setup_logging, LINE_TIME_DURATION_MIN, RAW_BTC_PRICE_DIR_FILE, CLEARED_PRICES_DIR, BLOCKS_SQL_DATA, CLEARED_PRICES_NAME_FILE # type: ignore #переменные подгружаются корректно, проблема в папках
+from config import LINE_TIME_DURATION_MIN, RAW_BTC_PRICE_DIR_FILE, CLEARED_PRICES_DIR, BLOCKS_SQL_DATA, CLEARED_PRICES_NAME_FILE # type: ignore #переменные подгружаются корректно, проблема в папках
+from modules.logger.logger import setup_logging
 import gc
 
 logger = setup_logging(__name__)

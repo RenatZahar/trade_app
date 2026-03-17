@@ -1,7 +1,7 @@
 import time
 import requests
 import os
-from config import setup_logging
+from modules.logger.logger import setup_logging
 
 logger = setup_logging(__name__)
 

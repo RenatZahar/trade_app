@@ -3,7 +3,8 @@ import time
 import os
 import pandas as pd
 import modules.finding_price_peaks.price_peaks_func as pnt
-from config import setup_logging, CLEARED_PRICES_DIR_FILE, BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE, LINE_TIME_DURATION_MIN
+from config import CLEARED_PRICES_DIR_FILE, BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE, LINE_TIME_DURATION_MIN
+from modules.logger.logger import setup_logging
 from .config import how_much_data_test_after_learning_mounth, cicle, price_diff_pct, plato
 
 

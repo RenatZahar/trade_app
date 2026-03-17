@@ -11,7 +11,7 @@ import sys
 from dotenv import load_dotenv
 
 import main_functions as mf
-from config import setup_logging
+from modules.logger.logger import setup_logging
 from modules.sql_funcs.moving_txs import moving_txs
 from modules.tests.converge_of_elasticnet import converge_of_elasticnet
 from modules.finding_price_peaks.get_price_peaks_df import update_peaks

@@ -4,7 +4,8 @@ import os
 import time
 import pandas as pd
 import dask.dataframe as dd
-from config import setup_logging, BLOCKS_SQL_DATA, APP_TEMP_DIR
+from config import BLOCKS_SQL_DATA, APP_TEMP_DIR
+from modules.logger.logger import setup_logging
 
 logger = setup_logging(__name__)
 script_dir = os.path.dirname(os.path.abspath(__file__))

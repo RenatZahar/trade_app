@@ -6,51 +6,14 @@ from dotenv import load_dotenv
 import sys
 import colorama
 import sqlite3
-from logging.handlers import RotatingFileHandler
 
 load_dotenv()
 
-import logging
 
 BASE_DIR = Path(__file__).resolve().parent
 sys.path.append(str(BASE_DIR))
 
-def setup_logging(module_name):
-    if not os.path.exists(os.path.join(BASE_DIR, 'logs')):
-        os.makedirs(os.path.join(BASE_DIR, 'logs'))
 
-    log_file = os.path.join(BASE_DIR, 'logs', f'{module_name}.log')
-
-    # Создаём стандартный логгер
-    logger = logging.getLogger(module_name)
-    if logger.handlers:  #коммент: убираем дубликаты
-        logger.handlers.clear()
-    logger.setLevel(logging.INFO)
-
-    # Форматтер для файла
-    # file_formatter = logging.Formatter('%(asctime)s [%(levelname)s] [%(name)s] %(message)s')
-
-    # Обработчик для файла
-    # file_handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=3)
-
-    # file_handler = logging.FileHandler(log_file)
-    # file_handler.setFormatter(file_formatter)
-    sys.stdout.reconfigure(line_buffering=True)
-    # Инициализируем colorama для Windows
-    # colorama.init(autoreset=True)
-
-    # Форматтер для консоли
-    console_formatter = logging.Formatter('%(asctime)s [%(levelname)s] [%(name)s] %(message)s')
-
-    # Обработчик для консоли
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(console_formatter)
-
-    # Добавляем обработчики к логгеру
-    # logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-
-    return logger
 
 def _max_sql_vars():
     # #коммент: читаем compile-options у in-memory БД; файл базы не трогаем

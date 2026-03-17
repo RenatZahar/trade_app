@@ -4,7 +4,8 @@ import time
 import os
 from dask.distributed import Client, LocalCluster
 from dask.config import set as dask_set
-from config import setup_logging, DASK_TEMP_DIR
+from config import DASK_TEMP_DIR
+from modules.logger.logger import setup_logging
 from dask.distributed import wait
 
 logger = setup_logging(__name__)

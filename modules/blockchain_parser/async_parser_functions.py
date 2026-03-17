@@ -27,7 +27,8 @@ import sys
 
 from modules.redis_init.redis_init import send_message
 
-from config import setup_logging, CLEARED_PRICES_DIR, rpc_user, rpc_password, rpc_host, rpc_port # type: ignore #переменные подгружаются корректно, проблема в папках
+from config import CLEARED_PRICES_DIR, rpc_user, rpc_password, rpc_host, rpc_port # type: ignore #переменные подгружаются корректно, проблема в папках
+from modules.logger.logger import setup_logging
 from .config import (
     REQUESTS_QUANTITY,
     MIN_VALUE_THRESHOLD,

@@ -14,7 +14,8 @@ import sqlite3
 from bitcoinrpc.authproxy import JSONRPCException
 from bitcoinrpc.authproxy import AuthServiceProxy
 
-from config import setup_logging, rpc_user, rpc_password, rpc_host, rpc_port, BLOCKS_SQL_DATA
+from config import rpc_user, rpc_password, rpc_host, rpc_port, BLOCKS_SQL_DATA
+from modules.logger.logger import setup_logging
 
 logger = setup_logging(__name__)
 
