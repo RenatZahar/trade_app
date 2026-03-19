@@ -3,7 +3,8 @@ import time
 import os
 import pandas as pd
 import modules.finding_price_peaks.price_peaks_func as pnt
-from config import setup_logging, CLEARED_PRICES_DIR_FILE, BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE, LINE_TIME_DURATION_MIN
+from config import CLEARED_PRICES_DIR_FILE, BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE, LINE_TIME_DURATION_MIN
+from modules.logger.logger import setup_logging
 from .config import how_much_data_test_after_learning_mounth, cicle, price_diff_pct, plato
 
 
@@ -13,7 +14,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
 
 def update_peaks():
-    print('сделать раз в день перезапуск get_peaks')
+    logger.warning('сделать раз в день перезапуск get_peaks')
     yesterday_midnight = pnt.get_yesterday_midnight()
     if os.path.exists(BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE):
         btc_price_data_with_peaks = pd.read_parquet(BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE)
@@ -31,10 +32,6 @@ def update_peaks():
         logger.info(btc_price_data_with_peaks.head(3))
         logger.info(btc_price_data_with_peaks.tail(3))
         btc_price_data_with_peaks.to_parquet(BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE)
-
-
-
-
 
 if __name__ == '__main__':
     update_peaks()

@@ -4,7 +4,8 @@ import os
 import time
 import pandas as pd
 import dask.dataframe as dd
-from config import setup_logging, BLOCKS_SQL_DATA, APP_TEMP_DIR
+from config import BLOCKS_SQL_DATA, APP_TEMP_DIR
+from modules.logger.logger import setup_logging
 
 logger = setup_logging(__name__)
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -14,8 +15,8 @@ dir_for_temp_files_of_module = os.path.join(APP_TEMP_DIR, module_name_for_temp_d
 # os.makedirs(dir_for_temp_files_of_module, exist_ok=True)
 
 def test_func():
-    print(script_dir)
-    print(dir_for_temp_files_of_module)
+    logger.info(script_dir)
+    logger.info(dir_for_temp_files_of_module)
 
 
 def save_parquet(temp_name_for_files_dir):

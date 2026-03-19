@@ -26,7 +26,8 @@ from operator import itemgetter
 from dask.delayed import delayed
 from datetime import datetime, timedelta
 from dask.distributed import as_completed
-from config import setup_logging, BLOCKS_SQL_DATA, TRAINED_MODELS_DIR, TOTAL_AMOUNT_MORE_THAN_BTC, MIN_TXS_PER_WALLET, BLOCK_HEIGHT_BLOCK_TIME_MAP_DIR_FILE
+from config import BLOCKS_SQL_DATA, TRAINED_MODELS_DIR, TOTAL_AMOUNT_MORE_THAN_BTC, MIN_TXS_PER_WALLET, BLOCK_HEIGHT_BLOCK_TIME_MAP_DIR_FILE
+from modules.logger.logger import setup_logging
 from modules.dask_client_init.get_dask_client import get_dask_client
 
 from . import service_funcs as sf
@@ -95,8 +96,8 @@ class GeneralModel():
         # model_X_dir = self.model_dir
         # переписать сохранение  - dir_of_group_of_model 
         # и далее все по итерациям.в итерациях сохранить tmsp ы обучения и профит теста 
-        print(f"Модель сохранена по пути: {model_path}")
-        print(f"Profit DataFrame сохранён по пути: {profit_path}")
+        logger.info(f"Модель сохранена по пути: {model_path}")
+        logger.info(f"Profit DataFrame сохранён по пути: {profit_path}")
     
 
     # начал писать пересохранение модели и ее файллв, дописать как структура будет перед глазами
@@ -152,7 +153,7 @@ class GeneralModel():
         # Генерация предсказаний на основе модели
         predictions = model.predict(data_copy)  # Убедитесь, что здесь удалены все неиспользуемые колонки
         
-        print('дописать проверку на соответствие фич, смотри под комментом')
+        logger.warning('дописать проверку на соответствие фич, смотри под комментом')
         # Перед вызовом predict убедиться, что data_copy содержит те же самые фичи, что использовались при обучении.
 
         # Можно сохранить список фич модели 

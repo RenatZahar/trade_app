@@ -27,7 +27,8 @@ import sys
 
 from modules.redis_init.redis_init import send_message
 
-from config import setup_logging, CLEARED_PRICES_DIR, rpc_user, rpc_password, rpc_host, rpc_port # type: ignore #переменные подгружаются корректно, проблема в папках
+from config import CLEARED_PRICES_DIR, rpc_user, rpc_password, rpc_host, rpc_port # type: ignore #переменные подгружаются корректно, проблема в папках
+from modules.logger.logger import setup_logging
 from .config import (
     REQUESTS_QUANTITY,
     MIN_VALUE_THRESHOLD,
@@ -184,14 +185,14 @@ async def async_print_db_schema(db_path, table_name='data_table'):
             columns_info = await cursor.fetchall()
             await cursor.close()
             if columns_info:
-                print(f"Схема таблицы '{table_name}':")
+                logger.info(f"Схема таблицы '{table_name}':")
                 for column in columns_info:
                     cid, name, type_, notnull, dflt_value, pk = column
-                    print(f" - Столбец: {name}, Тип данных: {type_}, NOT NULL: {notnull}, Значение по умолчанию: {dflt_value}, Первичный ключ: {pk}")
+                    logger.info(f" - Столбец: {name}, Тип данных: {type_}, NOT NULL: {notnull}, Значение по умолчанию: {dflt_value}, Первичный ключ: {pk}")
             else:
-                print(f"Таблица '{table_name}' не найдена.")
+                logger.warning(f"Таблица '{table_name}' не найдена.")
     except Exception as e:
-        print(f"Ошибка при получении схемы базы данных: {e}")
+        logger.error(f"Ошибка при получении схемы базы данных: {e}")
 
 def init_cache():
     global tx_cache, blocks_hash_cache
@@ -209,13 +210,13 @@ def open_tx_cache(filename):
     
     if not os.path.exists(cache_file_path):
         cache = OrderedDict()
-        print(f"Кэш {filename} не найден, создан новый словарь")
+        logger.info(f"Кэш {filename} не найден, создан новый словарь")
         return cache
     
     else:
         with open(cache_file_path, 'rb') as file:
             cache = pickle.load(file)
-            print(f'Читаем {filename} из файла')
+            logger.info(f'Читаем {filename} из файла')
             return cache
 
 def open_blocks_hash_cache(filename):
@@ -225,13 +226,13 @@ def open_blocks_hash_cache(filename):
     
     if not os.path.exists(cache_file_path):
         cache = OrderedDict()
-        print(f"Кэш {filename} не найден, создан новый словарь")
+        logger.info(f"Кэш {filename} не найден, создан новый словарь")
         return cache
     
     else:
         with open(cache_file_path, 'rb') as file:
             cache = pickle.load(file)
-            print(f'Читаем {filename} из файла')
+            logger.info(f'Читаем {filename} из файла')
             return cache
 
 async def async_save_cache_to_file(cache, filename):
@@ -243,12 +244,12 @@ async def save_caches():
     await async_save_cache_to_file(tx_cache, 'tx_cache.pkl')
 
 async def save_cache_to_file(cache, filename):
-    print(f'Старт сохранения: {filename}')
+    logger.info(f'Старт сохранения: {filename}')
     current_dir = os.path.dirname(os.path.realpath(__file__))
     cache_file_path = os.path.join(current_dir, filename)
     async with aiofiles.open(cache_file_path, 'wb') as file:
         await file.write(pickle.dumps(cache))
-    print(f'Сохранение завершено: {filename}')
+    logger.info(f'Сохранение завершено: {filename}')
 
 def general_cleaning_of_caches():
     global tx_cache, blocks_hash_cache
@@ -261,8 +262,8 @@ def general_cleaning_of_caches():
         num_to_remove = int(len(blocks_hash_cache) - MAX_LINES_IN_HASH_CACHE)
         for _ in range(num_to_remove):
             blocks_hash_cache.popitem(last=False)
-    print(f'\nСтрок в tx_cache: {len(tx_cache)}')
-    print(f'Строк в blocks_hash_cache: {len(blocks_hash_cache)}')
+    logger.info(f'Строк в tx_cache: {len(tx_cache)}')
+    logger.info(f'Строк в blocks_hash_cache: {len(blocks_hash_cache)}')
 
 async def save_to_cache(tx_details_list, cache_type, old_txs = False):
     global tx_cache, blocks_hash_cache
@@ -396,7 +397,7 @@ def check_time(stats):
     sync_rpc_time = sync_rpc_stats[3] 
     total_time = sum([info[3] for info in stats.stats.values()])
     percentage = (sync_rpc_time / total_time) * 100
-    print(f"Функция sync_rpc_connection занимает {percentage:.2f}% общего времени выполнения.")
+    logger.info(f"Функция sync_rpc_connection занимает {percentage:.2f}% общего времени выполнения.")
 
 def get_rpc_connection():
     global rpc_user, rpc_password, rpc_host, rpc_port
@@ -437,10 +438,10 @@ def sync_rpc_connection(rpc_connection, rpc_method, *args):
             response = method(*args)
             return response
     except Exception as e:
-        print(f'Размер запроса: {len(batch)}')
-        print(f"Ошибка: {e}, ожидаем, попытка {attempt}")
-        print(f'rpc_method: {rpc_method}, *args: {args}')
-    print("Не удалось установить соединение после 150 попыток.")
+        logger.warning(f'Размер запроса: {len(batch)}')
+        logger.error(f"Ошибка: {e}, ожидаем, попытка {attempt}")
+        logger.warning(f'rpc_method: {rpc_method}, *args: {args}')
+    logger.error("Не удалось установить соединение после 150 попыток.")
     return None
 
 async def async_rpc_connection(rpc_method, height, *args):
@@ -586,9 +587,9 @@ async def cleaning_tx_vout_data(tx_id, tx_details, height, block_hash, block_tim
             continue
         amount = vout['value']
         if amount > 1000000 or amount < -1000000:
-            print('satoshi')
+            logger.warning('satoshi')
             amount = amount/100000000
-            print(tx_details)
+            logger.info(str(tx_details))
         records.append([tx_id, wallet_id, amount, btc_time_price, block_time, height, block_hash, n]) 
     return records
 
@@ -603,7 +604,7 @@ async def cleaning_tx_vin_data(index, number, prev_tx_vout_to_current_tx_map, he
             vout_to_tx_map_count += 1
 
     async with print_lock:        
-        print(f'Блок {height}, {index+1}/{number}. Всего tx для входов: {prev_tx_id_count}, выходов: {vout_to_tx_map_count}')
+        logger.info(f'Блок {height}, {index+1}/{number}. Всего tx для входов: {prev_tx_id_count}, выходов: {vout_to_tx_map_count}')
     
     commands = []
     prev_tx_details_list_cache= []
@@ -634,8 +635,8 @@ async def cleaning_tx_vin_data(index, number, prev_tx_vout_to_current_tx_map, he
         avg_cache_vin.append(cache_vin_percnt)
         avg_hash_for_vin.append(hash_for_vin_percnt)
     async with print_lock:
-        print(f'Загружено tx \033[93mиз кэша\033[0m для \033[93mvin: {cache_vin_percnt}%\033[0m от всех vin, кол-во: {prev_tx_details_list_cache_count}')
-        print(f'Команд \033[93mс хэшем\033[0m: {commands_with_hash}, \033[93m{hash_for_vin_percnt}%\033[0m, осталось команд без хэша: {commands_without_hash}')
+        logger.info(f'Загружено tx из кэша для vin: {cache_vin_percnt}% от всех vin, кол-во: {prev_tx_details_list_cache_count}')
+        logger.info(f'Команд с хэшем: {commands_with_hash}, {hash_for_vin_percnt}%, осталось команд без хэша: {commands_without_hash}')
 
     start_time = time.time()
     prev_tx_details_list = await async_rpc_connection(None, height, commands)
@@ -644,7 +645,7 @@ async def cleaning_tx_vin_data(index, number, prev_tx_vout_to_current_tx_map, he
     await save_to_cache(prev_tx_details_list, 'tx_cache', old_txs = True )
 
     async with print_lock:
-        print(f'Блок {height}, {index+1}/{number}. Получение данных по \033[93m vin, сек: {round(end_time-start_time, 4)}\033[0m, транзакций: {len(prev_tx_details_list)}')
+        logger.info(f'Блок {height}, {index+1}/{number}. Получение данных по vin, сек: {round(end_time-start_time, 4)}, транзакций: {len(prev_tx_details_list)}')
 
     prev_tx_details_list = [
         tx_details for tx_details in prev_tx_details_list 
@@ -686,19 +687,19 @@ async def cleaning_tx_vin_data(index, number, prev_tx_vout_to_current_tx_map, he
     prev_tx_vout_to_current_tx_map = {}
     dwn_prev_tx_details_dict = {}    
     end_time = time.time()
-    print(f'Блок {height}, {index+1}/{number}. Команд {len(commands)}, из кэша {prev_tx_details_list_cache_count}, сумма {len(commands)+prev_tx_details_list_cache_count}, сколько скачать надо {prev_tx_id_count}')
-    print(f'Блок {height}, {index+1}/{number}. Всего скачанных записей с продажей {len(records)}, должно равняться {vout_to_tx_map_count}')
+    logger.info(f'Блок {height}, {index+1}/{number}. Команд {len(commands)}, из кэша {prev_tx_details_list_cache_count}, сумма {len(commands)+prev_tx_details_list_cache_count}, сколько скачать надо {prev_tx_id_count}')
+    logger.info(f'Блок {height}, {index+1}/{number}. Всего скачанных записей с продажей {len(records)}, должно равняться {vout_to_tx_map_count}')
     if len(records) != vout_to_tx_map_count:
-        print(f'Блок {height}, {index+1}/{number}. Разница между нужно было скачать и было скачано: {(vout_to_tx_map_count - len(records))}, {round(((vout_to_tx_map_count - len(records))/vout_to_tx_map_count*100), 4)} %')
+        logger.warning(f'Блок {height}, {index+1}/{number}. Разница между нужно было скачать и было скачано: {(vout_to_tx_map_count - len(records))}, {round(((vout_to_tx_map_count - len(records))/vout_to_tx_map_count*100), 4)} %')
         
     # допускаем 3 процентов расхождения
     upper_limit = vout_to_tx_map_count + (vout_to_tx_map_count * 0.03)
     lower_limit = vout_to_tx_map_count - (vout_to_tx_map_count * 0.03)
     if len(records) > upper_limit or len(records) < lower_limit:
-        print(f"\033[31mБлок {height}, {index+1}/{number}\033[0m")
-        print("\033[31mБОЛЬШАЯ РАЗНИЦА!\033[0m")
+        logger.warning(f"Блок {height}, {index+1}/{number}")
+        logger.warning("БОЛЬШАЯ РАЗНИЦА!")
     if (vout_to_tx_map_count - len(records))/vout_to_tx_map_count*100 > 20:
-        print('\033[31mРазница больше 20 процентов\033[0m')
+        logger.warning('Разница больше 20 процентов')
         send_message('parser_status', 'completed with error')
         raise Exception("Разница больше 20 процентов между нужно было загрузить и загружено")
     return records
@@ -719,14 +720,14 @@ async def async_check_block_height_data(db_path, table_name='data_table'):
                 value = row[0]
                 if not isinstance(value, int):
                     non_int_values.append((value, type(value)))
-            print(f"Количество строк: {len(rows)}")
-            print(f"Количество значений Block_height, которые не являются int: {len(non_int_values)}")
+            logger.info(f"Количество строк: {len(rows)}")
+            logger.info(f"Количество значений Block_height, которые не являются int: {len(non_int_values)}")
             if non_int_values:
-                print("Значения Block_height, не являющиеся int:")
+                logger.info("Значения Block_height, не являющиеся int:")
                 for value, value_type in non_int_values[:10]:  # Выводим первые 10
-                    print(f" - Значение: {value}, Тип данных: {value_type}")
+                    logger.info(f" - Значение: {value}, Тип данных: {value_type}")
     except Exception as e:
-        print(f"Ошибка при проверке данных столбца 'Block_height': {e}")
+        logger.error(f"Ошибка при проверке данных столбца 'Block_height': {e}")
 
 def records_to_df(all_records):
     # Подготовка данных к сохранению
@@ -817,17 +818,17 @@ def print_cicle_info(start_time, min_block_height, max_block_height, len_blocks_
     end_time = time.time()
     cicle_time =  end_time - start_time
     # print(f"\nРазмер tx_cache в памяти: {int((asizeof.asizeof(tx_cache))/1000000)} мегабайт")
-    print(f"Строк в tx_cache: {len(tx_cache)}")
+    logger.info(f"Строк в tx_cache: {len(tx_cache)}")
     # print(f"Размер blocks_hash_cache в памяти: {int((asizeof.asizeof(blocks_hash_cache))/1000000)} мегабайт")
-    print(f"Строк в blocks_hash_cache : {len(blocks_hash_cache)}")
-    print(f'Больше нуля в df: {len(df.loc[df.Amount > 0])}, меньше нуля в df: {len(df.loc[df.Amount < 0])}')
-    print(f'Больше нуля минус меньше нуля в дф: {len(df.loc[df.Amount > 0])-len(df.loc[df.Amount < 0])}, всего срок: {len(df)}')
-    print(f'\nСохранено {min_block_height} - {max_block_height}') 
-    print(f"Обработка завершена, данные сохранены. Время выполнения: {cicle_time:.2f} секунд")
-    print(f'Блоков в минуту в цикле: {len_blocks_group/(int(cicle_time)/60):.2f}')
-    print(f'Средний процент загрузок tx из кэша: {statistics.mean(avg_cache_vin)}')
-    print(f'Средний процент команд tx с хэшем: {statistics.mean(avg_hash_for_vin)}')
-    print(f"Количество блоков для скачивания: {quantity_of_blocks_to_download}")
+    logger.info(f"Строк в blocks_hash_cache : {len(blocks_hash_cache)}")
+    logger.info(f'Больше нуля в df: {len(df.loc[df.Amount > 0])}, меньше нуля в df: {len(df.loc[df.Amount < 0])}')
+    logger.info(f'Больше нуля минус меньше нуля в дф: {len(df.loc[df.Amount > 0])-len(df.loc[df.Amount < 0])}, всего срок: {len(df)}')
+    logger.info(f'Сохранено {min_block_height} - {max_block_height}')
+    logger.info(f"Обработка завершена, данные сохранены. Время выполнения: {cicle_time:.2f} секунд")
+    logger.info(f'Блоков в минуту в цикле: {len_blocks_group/(int(cicle_time)/60):.2f}')
+    logger.info(f'Средний процент загрузок tx из кэша: {statistics.mean(avg_cache_vin)}')
+    logger.info(f'Средний процент команд tx с хэшем: {statistics.mean(avg_hash_for_vin)}')
+    logger.info(f"Количество блоков для скачивания: {quantity_of_blocks_to_download}")
     time_of_circle = len_blocks_group/(int(cicle_time)/60)
     return time_of_circle
 

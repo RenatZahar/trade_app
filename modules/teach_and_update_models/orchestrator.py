@@ -6,7 +6,8 @@ from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import random
 
-from config import setup_logging, NEW_PARAM_GRID_DIR, PARAM_GRID_DIR, PARAM_GRID_RESULTS
+from config import NEW_PARAM_GRID_DIR, PARAM_GRID_DIR, PARAM_GRID_RESULTS
+from modules.logger.logger import setup_logging
 import main_functions as mf
 from . import service_funcs as sf
 from . import data_operations as do
@@ -26,7 +27,7 @@ def main_processing_model_orchestra(model, TEST):
         # посмтроить иерархию - сначала разные параметры 
         # data_for_teach_df -> model_param ->.........додумать
 
-    print('изучить возможноть использовать во временном ряду не только куммулятывных сумм но и скользящего среднего')
+    logger.warning('изучить возможноть использовать во временном ряду не только куммулятывных сумм но и скользящего среднего')
     if TEST:
         logger.info("Тестовый режим")
         logger.info(f"Кол-во кошельков в тесте: {round((TEST*100), 2)} %")
@@ -70,13 +71,13 @@ def teaching_with_param_grid_orchestrator(TEACHING_TEST):
 
     tmsps_data = sf.get_tmsps_data_of_model(time_grid_params)
     tmps = tmsps_data[1]
-    print(tmps)
+    logger.info(str(tmps))
 
     logger.info(f'\033[34mStart get data for testing grid (only 1 iter)\033[0m')
     # я просто хочу протестировать параметры моделей, проверить их на сходимость
     # итерации не нужны - должна быть 1 в гриде
     # в get_corelation_by_tmsp_df испльузется model.filter_params и model.correlation_params.get('correlation_type'
-    print(grid_params[0])
+    logger.info(str(grid_params[0]))
     filter_params = grid_params[0]['model']['filters']
     grid_with_opimized_corr = []
     grid_with_basic_corr = []
@@ -108,11 +109,11 @@ def teaching_with_param_grid_orchestrator(TEACHING_TEST):
             cor_data_in_iteration_to_teach.to_parquet(os.path.join(PARAM_GRID_RESULTS, f'cor_data_in_1_iteration_to_teach.parquet'))
             cor_data_in_iteration_to_profit_test.to_parquet(os.path.join(PARAM_GRID_RESULTS, f'cor_data_in_1_iteration_to_profit_test.parquet'))
         
-        print('ПЕРЕПИСАТЬ ПОД ДАСК')
+        logger.warning('ПЕРЕПИСАТЬ ПОД ДАСК')
         with ProcessPoolExecutor(max_workers=8) as executor:
             futures = []
             for index, param in enumerate(group_of_grid):
-                print(f'\nОбучение модели {index+1} из {len(group_of_grid)}', end='')
+                logger.info(f'Обучение модели {index+1} из {len(group_of_grid)}')
                 futures.append(executor.submit(
                     train_model_for_param, 
                     param, 
@@ -189,7 +190,7 @@ def teach_model(model_type_data, model_type, model_info, model_dir_file, TEACHIN
         teach_model_from_json(model_type, model_info, model_dir_file, TEACHING_TEST)
     elif 'pkl' in model_type_data:
         logger.info("Найден новый pkl модели") 
-        print('Код для использования модели PKL еще не написан. Надо сохранять параметры в папку teached models если буду использовать pkl')
+        logger.warning('Код для использования модели PKL еще не написан. Надо сохранять параметры в папку teached models если буду использовать pkl')
 
 def teach_model_from_json(model_type, model_info, init_dir_file, TEACHING_TEST):
     if model_type == 'ElasticNet':

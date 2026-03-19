@@ -1,20 +1,17 @@
-# init_db.py
-
 import asyncio
-
 import os
+
+from modules.logger.logger import setup_logging
+
 from db_servise_funcs import (
     init_db_mod,
     async_print_db_schema,
     async_alter_table_set_primary_key
 )
-from config import BLOCKS_SQL_DATA, setup_logging  # Убедитесь, что пути корректны
+from config import BLOCKS_SQL_DATA  # Убедитесь, что пути корректны
 # проверить чтобы все действия были реализованы через копирование на диск С. 
+
 logger = setup_logging(__name__)
-
-
-# настроить логирование из одного источника и (утилс) и их складывание в одну папку
-
 def setup_temp_directory(temp_dir='C:/sqlite_temp'):
     """
     Настройка временного каталога для SQLite.
@@ -30,7 +27,7 @@ async def main_db_servise():
     logger.info("Начало инициализации базы данных")
     
     setup_temp_directory('I:/sqlite_temp')
-    print(BLOCKS_SQL_DATA)
+    logger.info(f"Путь к базе данных: {BLOCKS_SQL_DATA}")
 
     await init_db_mod(BLOCKS_SQL_DATA, table_name='data_table')
 

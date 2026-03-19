@@ -12,8 +12,8 @@ import json
 from dotenv import load_dotenv
 from modules.redis_init.redis_init import send_message, waiting_for_message
 
-from main import PARSER_TEST
-from config import setup_logging, APP_TEMP_DIR, NEW_MODELS_PATH
+from config import APP_TEMP_DIR, NEW_MODELS_PATH
+from modules.logger.logger import setup_logging
 from modules.btc_core_init.btc_core_manager import get_btc_status, blocks_to_download
 from modules.blockchain_parser.main_parser  import parser
 from modules.bts_price_updater.raw_prices_cleaning import clean_raw_data
@@ -89,7 +89,7 @@ def start_blockchain_parser():
 def run_parser_asyncio():
     global parser_running
     try:
-        asyncio.run(parser(PARSER_TEST))
+        asyncio.run(parser())
     except Exception as e:
         logger.error(f"Ошибка в парсере блокчейна: {e}")
     finally:
@@ -117,9 +117,9 @@ def clear_all_temp_directory():
                 # print(f"Файл удален: {file_path}")
             elif os.path.isdir(file_path):
                 shutil.rmtree(file_path)  # Рекурсивное удаление директории
-                print(f"Папка удалена: {file_path}")
+                logger.info(f"Папка удалена: {file_path}")
         except Exception as e:
-            print(f"Не удалось удалить {file_path}. Причина: {e}")
+            logger.error(f"Не удалось удалить {file_path}. Причина: {e}")
 
 def start_flask():
     """Запускает Flask-приложение в отдельном потоке"""
@@ -165,6 +165,6 @@ def clear_temp_directory_of_module(module_name):
                 # print(f"Файл удален: {file_path}")
             elif os.path.isdir(file_path):
                 shutil.rmtree(file_path)  # Рекурсивное удаление директории
-                print(f"Папка удалена: {file_path}")
+                logger.info(f"Папка удалена: {file_path}")
         except Exception as e:
-            print(f"Не удалось удалить {file_path}. Причина: {e}")
+            logger.error(f"Не удалось удалить {file_path}. Причина: {e}")

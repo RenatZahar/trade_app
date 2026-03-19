@@ -4,9 +4,11 @@ import os
 import pandas as pd
 import sqlite3
 from config import TXS_PARQUET_DIR, BLOCKS_SQL_DATA
+from modules.logger.logger import setup_logging
 import time
 
 TEST = 1
+logger = setup_logging(__name__)
 
 pd.set_option('display.expand_frame_repr', False)  # не переносить строки
 pd.set_option('display.max_colwidth', None)
@@ -26,20 +28,20 @@ def create_needed_indexes(conn):
     existing_indexes = get_existing_indexes(conn)
 
     if 'idx_wallet_id' not in existing_indexes:
-        print("Создание индекса на wallet_id")
+        logger.info("Создание индекса на wallet_id")
         conn.execute("CREATE INDEX idx_wallet_id ON data_table(wallet_id);")
         conn.commit()
-        print("Индекс на wallet_id создан")
+        logger.info("Индекс на wallet_id создан")
     else:
-        print("Индекс на wallet_id уже существует")
+        logger.info("Индекс на wallet_id уже существует")
 
     if 'idx_Block_time' not in existing_indexes:
-        print("Создание индекса на Block_time")
+        logger.info("Создание индекса на Block_time")
         conn.execute("CREATE INDEX idx_Block_time ON data_table(Block_time);")
         conn.commit()
-        print("Индекс на Block_time создан")
+        logger.info("Индекс на Block_time создан")
     else:
-        print("Индекс на Block_time уже существует")
+        logger.info("Индекс на Block_time уже существует")
 
 
 
@@ -107,7 +109,7 @@ def transfer_script():
     # Проверяем, существует ли файл, и удаляем его
     if os.path.exists(new_sqlite_db):
         os.remove(new_sqlite_db)
-        print(f"Старый файл базы данных {new_sqlite_db} удалён.")
+        logger.info(f"Старый файл базы данных {new_sqlite_db} удалён.")
 
     new_conn = create_new_database_with_settings(new_sqlite_db)
 
@@ -147,7 +149,7 @@ def transfer_script():
         if not rows:
             break
 
-        print("Перенос следующего пакета данных")
+        logger.info("Перенос следующего пакета данных")
 
         # Вставляем данные в новую базу данных
         new_conn.executemany(insert_query, rows)
@@ -155,8 +157,8 @@ def transfer_script():
 
         total_rows_transferred += len(rows)
         end_time = time.time()
-        print(f'Перенос занял {end_time - start_time:.2f} секунд')
-        print(f"Всего перенесено строк: {total_rows_transferred}")
+        logger.info(f'Перенос занял {end_time - start_time:.2f} секунд')
+        logger.info(f"Всего перенесено строк: {total_rows_transferred}")
 
     # Создаем необходимые индексы в новой базе данных после переноса данных
     create_needed_indexes(new_conn)
@@ -166,4 +168,4 @@ def transfer_script():
     old_conn.close()
     new_conn.close()
 
-    print("Перенос данных завершен.")
+    logger.info("Перенос данных завершен.")

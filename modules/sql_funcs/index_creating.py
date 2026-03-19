@@ -3,6 +3,10 @@ import traceback
 from pathlib import Path
 import pandas as pd
 
+from modules.logger.logger import setup_logging
+
+logger = setup_logging(__name__)
+
 
 def get_all_table_names(db_path):
     """
@@ -20,7 +24,7 @@ def get_all_table_names(db_path):
         conn.close()
         return tables
     except Exception as e:
-        print(f"Ошибка при получении списка таблиц: {e}")
+        logger.error(f"Ошибка при получении списка таблиц: {e}")
         return []
 
 
@@ -41,7 +45,7 @@ def fetch_last_five_rows(db_path, table_name=None):
         if isinstance(db_path, Path):
             db_path = str(db_path)
         
-        print(f"Подключение к базе данных по пути: {db_path}")
+        logger.info(f"Подключение к базе данных по пути: {db_path}")
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
@@ -49,12 +53,12 @@ def fetch_last_five_rows(db_path, table_name=None):
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?;", (table_name,))
         table_exists = cursor.fetchone()
         if not table_exists:
-            print(f"Таблица '{table_name}' не найдена.")
+            logger.warning(f"Таблица '{table_name}' не найдена.")
             return []
 
         limit = 5
         if not isinstance(limit, int) or limit <= 0:
-            print("Значение limit должно быть положительным целым числом.")
+            logger.warning("Значение limit должно быть положительным целым числом.")
             return []
 
         # Выполнение запроса для извлечения последних 5 строк
@@ -74,16 +78,16 @@ def fetch_last_five_rows(db_path, table_name=None):
         conn.close()
 
         if last_five_rows:
-            print(f"Последние {limit} строк из таблицы '{table_name}':")
+            logger.info(f"Последние {limit} строк из таблицы '{table_name}':")
             for row in last_five_rows:
-                print(row)
+                logger.info(str(row))
         else:
-            print(f"В таблице '{table_name}' нет записей.")
+            logger.info(f"В таблице '{table_name}' нет записей.")
 
         return last_five_rows
 
     except Exception as e:
-        print(f"Ошибка при извлечении строк: {e}")
+        logger.error(f"Ошибка при извлечении строк: {e}")
         traceback.print_exc()
         return []
 
@@ -105,7 +109,7 @@ def count_block_height_above(db_path, threshold, table_name=None):
         if isinstance(db_path, Path):
             db_path = str(db_path)
         
-        print(f"Подключение к базе данных по пути: {db_path}")
+        logger.info(f"Подключение к базе данных по пути: {db_path}")
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
@@ -113,7 +117,7 @@ def count_block_height_above(db_path, threshold, table_name=None):
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?;", (table_name,))
         table_exists = cursor.fetchone()
         if not table_exists:
-            print(f"Таблица '{table_name}' не найдена.")
+            logger.warning(f"Таблица '{table_name}' не найдена.")
             return 0
 
         # Выполнение запроса для подсчёта строк
@@ -127,14 +131,14 @@ def count_block_height_above(db_path, threshold, table_name=None):
         if result:
             count = result[0]
             formatted_count = f"{count:,}".replace(",", " ")
-            print(f"Количество строк, где Block_height > {threshold} в таблице '{table_name}': {formatted_count}")
+            logger.info(f"Количество строк, где Block_height > {threshold} в таблице '{table_name}': {formatted_count}")
             return count
         else:
-            print("Не удалось получить результат запроса.")
+            logger.warning("Не удалось получить результат запроса.")
             return 0
 
     except Exception as e:
-        print(f"Ошибка при подсчёте строк: {e}")
+        logger.error(f"Ошибка при подсчёте строк: {e}")
         traceback.print_exc()
         return 0
 
@@ -156,7 +160,7 @@ def count_total_rows(db_path, table_name=None):
         if isinstance(db_path, Path):
             db_path = str(db_path)
         
-        print(f"Подключение к базе данных по пути: {db_path}")
+        logger.info(f"Подключение к базе данных по пути: {db_path}")
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
@@ -164,7 +168,7 @@ def count_total_rows(db_path, table_name=None):
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?;", (table_name,))
         table_exists = cursor.fetchone()
         if not table_exists:
-            print(f"Таблица '{table_name}' не найдена.")
+            logger.warning(f"Таблица '{table_name}' не найдена.")
             return 0
 
         # Выполнение запроса для подсчёта общего количества строк
@@ -178,14 +182,14 @@ def count_total_rows(db_path, table_name=None):
         if result:
             count = result[0]
             formatted_count = f"{count:,}".replace(",", " ")
-            print(f"Общее количество строк в таблице '{table_name}': {formatted_count}")
+            logger.info(f"Общее количество строк в таблице '{table_name}': {formatted_count}")
             return count
         else:
-            print("Не удалось получить результат запроса.")
+            logger.warning("Не удалось получить результат запроса.")
             return 0
 
     except Exception as e:
-        print(f"Ошибка при подсчёте общего количества строк: {e}")
+        logger.error(f"Ошибка при подсчёте общего количества строк: {e}")
         traceback.print_exc()
         return 0
 
@@ -206,7 +210,7 @@ def print_db_schema(db_path, table_name=None):
         if isinstance(db_path, Path):
             db_path = str(db_path)
         
-        print(f"Подключение к базе данных по пути: {db_path}")
+        logger.info(f"Подключение к базе данных по пути: {db_path}")
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
@@ -214,18 +218,18 @@ def print_db_schema(db_path, table_name=None):
         columns_info = cursor.fetchall()
 
         if columns_info:
-            print(f"Схема таблицы '{table_name}':")
+            logger.info(f"Схема таблицы '{table_name}':")
             for column in columns_info:
                 cid, name, type_, notnull, dflt_value, pk = column
-                print(f" - Столбец: {name}, Тип данных: {type_}, NOT NULL: {notnull}, Значение по умолчанию: {dflt_value}, Первичный ключ: {pk}")
+                logger.info(f" - Столбец: {name}, Тип данных: {type_}, NOT NULL: {notnull}, Значение по умолчанию: {dflt_value}, Первичный ключ: {pk}")
         else:
-            print(f"Таблица '{table_name}' не найдена.")
+            logger.warning(f"Таблица '{table_name}' не найдена.")
 
         cursor.close()
         conn.close()
 
     except Exception as e:
-        print(f"Ошибка при получении схемы таблицы: {e}")
+        logger.error(f"Ошибка при получении схемы таблицы: {e}")
         traceback.print_exc()
 
 
@@ -242,7 +246,7 @@ def get_sqlite_stat1(db_path):
         cursor.close()
         return stat_data
     except sqlite3.Error as e:
-        print(f"Ошибка при работе с базой данных: {e}")
+        logger.error(f"Ошибка при работе с базой данных: {e}")
         return None
     finally:
         if conn:
@@ -265,30 +269,30 @@ def recreate_indexes(db_path, table_name=None, wallet_index_name='idx_wallet_id'
         if isinstance(db_path, Path):
             db_path = str(db_path)
         
-        print(f"Подключение к базе данных по пути: {db_path}")
+        logger.info(f"Подключение к базе данных по пути: {db_path}")
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
-        print(f"Удаляем индекс {wallet_index_name} (если существует) для таблицы '{table_name}'...")
+        logger.info(f"Удаляем индекс {wallet_index_name} (если существует) для таблицы '{table_name}'...")
         cursor.execute(f"DROP INDEX IF EXISTS {wallet_index_name};")  # #comment: удаление индекса по Wallet_id
         
-        print(f"Создаем новый индекс {wallet_index_name} на столбец Wallet_id в таблице '{table_name}'...")
+        logger.info(f"Создаем новый индекс {wallet_index_name} на столбец Wallet_id в таблице '{table_name}'...")
         cursor.execute(f"CREATE INDEX {wallet_index_name} ON {table_name}(Wallet_id);")  # #comment: создание индекса по Wallet_id
 
-        print(f"Удаляем индекс {timestamp_index_name} (если существует) для таблицы '{table_name}'...")
+        logger.info(f"Удаляем индекс {timestamp_index_name} (если существует) для таблицы '{table_name}'...")
         cursor.execute(f"DROP INDEX IF EXISTS {timestamp_index_name};")  # #comment: удаление индекса по timestamp
         
-        print(f"Создаем новый индекс {timestamp_index_name} на столбец timestamp в таблице '{table_name}'...")
+        logger.info(f"Создаем новый индекс {timestamp_index_name} на столбец timestamp в таблице '{table_name}'...")
         cursor.execute(f"CREATE INDEX {timestamp_index_name} ON {table_name}(timestamp);")  # #comment: создание индекса по timestamp
         
-        print("Обновляем статистику базы данных командой ANALYZE...")
+        logger.info("Обновляем статистику базы данных командой ANALYZE...")
         cursor.execute("ANALYZE;")  # #comment: обновление статистики
         
         conn.commit()  # #comment: фиксируем изменения
-        print(f"Пересоздание индексов завершено успешно для таблицы '{table_name}'.")
+        logger.info(f"Пересоздание индексов завершено успешно для таблицы '{table_name}'.")
         
     except Exception as e:
-        print(f"Ошибка при пересоздании индексов: {e}")
+        logger.error(f"Ошибка при пересоздании индексов: {e}")
         traceback.print_exc()
     finally:
         if cursor:
@@ -300,7 +304,7 @@ def recreate_indexes(db_path, table_name=None, wallet_index_name='idx_wallet_id'
 if __name__ == "__main__":
     BLOCKS_SQL_DATA = r"C:\blocks_sql_data\blocks_sql_data_db.db"
     
-    print("Запуск работы с базой данных:", BLOCKS_SQL_DATA)
+    logger.info(f"Запуск работы с базой данных: {BLOCKS_SQL_DATA}")
     
     # stat_data = get_sqlite_stat1(BLOCKS_SQL_DATA)
     # print("Содержимое sqlite_stat1:", stat_data)
@@ -318,4 +322,4 @@ if __name__ == "__main__":
     
     recreate_indexes(BLOCKS_SQL_DATA)  # пересоздание индексов для всех таблиц
     
-    print("\nРабота завершена.")
+    logger.info("Работа завершена.")

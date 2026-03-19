@@ -2,7 +2,8 @@
 
 import os
 import time
-from config import setup_logging, BLOCKS_SQL_DATA
+from config import BLOCKS_SQL_DATA
+from modules.logger.logger import setup_logging
 import os
 import pandas as pd
 import plotly.graph_objs as go
@@ -125,4 +126,4 @@ def index():
 
 
 if __name__ == '__main__':
-    print('flask app.secret_key = your_secret_key  # Необходим для flash сообщений')
+    logger.warning('flask app.secret_key = your_secret_key  # Необходим для flash сообщений')

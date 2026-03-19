@@ -38,5 +38,6 @@ Thumbs.db
 *.json
 *.zip
 *.png
+*.log
 
 data_operations.py
