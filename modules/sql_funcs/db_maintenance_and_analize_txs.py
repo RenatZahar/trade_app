@@ -208,12 +208,12 @@ def count_wallet_transactions_and_rows(db_path):
         cursor.execute(query)
         results = cursor.fetchall()
         
-        print("Результаты группировки:")
+        logger.info("Результаты группировки:")
         for cnt, wallet_count, row_count in results:
-            print(f"Кошельки с {cnt} транзакциями: {wallet_count} кошельков, всего {row_count} строк")
+            logger.info(f"Кошельки с {cnt} транзакциями: {wallet_count} кошельков, всего {row_count} строк")
             
     except Exception as e:
-        print("Ошибка при выполнении запроса:", e)
+        logger.error(f"Ошибка при выполнении запроса: {e}")
         traceback.print_exc()
     finally:
         cursor.close()
@@ -236,7 +236,7 @@ if __name__ == "__main__":
     logger.info("Проводится анализ таблицы")
     result_after = analyze_wallet_transactions(BLOCKS_SQL_DATA, table_name)
     # print("Результаты анализа после удаления:")
-    print(f"Общее количество строк в таблице: {result_after}")
+    logger.info(f"Общее количество строк в таблице: {result_after}")
 
     # подсчет кол-ва кошельков с 1, 2 и 3 txs
     count_wallet_transactions_and_rows(BLOCKS_SQL_DATA)

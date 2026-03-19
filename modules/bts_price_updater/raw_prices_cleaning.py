@@ -94,7 +94,7 @@ def clean_raw_data():
     full_dir = os.path.join(CLEARED_PRICES_DIR, CLEARED_PRICES_NAME_FILE)
 
     if os.path.exists(full_dir):
-        print(f"Файл {full_dir} существует.")
+        logger.info(f"Файл {full_dir} существует.")
         btc_price_data = pd.read_parquet(full_dir)
     else:
 

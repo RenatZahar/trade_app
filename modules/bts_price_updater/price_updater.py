@@ -28,7 +28,7 @@ def get_price_data(start_time_ms, end_time_ms):
             response.raise_for_status()
             data = response.json()
         except requests.exceptions.RequestException as e:
-            print(f"Ошибка при запросе данных: {e}")
+            logger.error(f"Ошибка при запросе данных: {e}")
             break
 
         if not data:

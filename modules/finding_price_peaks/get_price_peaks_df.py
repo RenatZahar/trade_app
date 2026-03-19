@@ -14,7 +14,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
 
 def update_peaks():
-    print('сделать раз в день перезапуск get_peaks')
+    logger.warning('сделать раз в день перезапуск get_peaks')
     yesterday_midnight = pnt.get_yesterday_midnight()
     if os.path.exists(BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE):
         btc_price_data_with_peaks = pd.read_parquet(BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE)
@@ -32,10 +32,6 @@ def update_peaks():
         logger.info(btc_price_data_with_peaks.head(3))
         logger.info(btc_price_data_with_peaks.tail(3))
         btc_price_data_with_peaks.to_parquet(BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE)
-
-
-
-
 
 if __name__ == '__main__':
     update_peaks()

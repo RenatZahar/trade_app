@@ -117,9 +117,9 @@ def clear_all_temp_directory():
                 # print(f"Файл удален: {file_path}")
             elif os.path.isdir(file_path):
                 shutil.rmtree(file_path)  # Рекурсивное удаление директории
-                print(f"Папка удалена: {file_path}")
+                logger.info(f"Папка удалена: {file_path}")
         except Exception as e:
-            print(f"Не удалось удалить {file_path}. Причина: {e}")
+            logger.error(f"Не удалось удалить {file_path}. Причина: {e}")
 
 def start_flask():
     """Запускает Flask-приложение в отдельном потоке"""
@@ -165,6 +165,6 @@ def clear_temp_directory_of_module(module_name):
                 # print(f"Файл удален: {file_path}")
             elif os.path.isdir(file_path):
                 shutil.rmtree(file_path)  # Рекурсивное удаление директории
-                print(f"Папка удалена: {file_path}")
+                logger.info(f"Папка удалена: {file_path}")
         except Exception as e:
-            print(f"Не удалось удалить {file_path}. Причина: {e}")
+            logger.error(f"Не удалось удалить {file_path}. Причина: {e}")

@@ -65,17 +65,6 @@ async def parser():
                 time_of_circle = apf.print_cicle_info(start_time, min_block_height, max_block_height , len(blocks_group), data, QUANTITY_OF_BLOCKS_IN_ITERATION) # type: ignore
                 apf.get_avg_blocks_in_minut(time_of_circle)
 
-                # перенести в тесты потом 
-                # if PARSER_TEST:
-                #     print('start tests')
-                #     tests.fetch_last_five_rows(BLOCKS_SQL_DATA)
-                #     await asyncio.gather(*tasks)
-                #     print('end tests')
-                #     return
-
-                # ожидаем явное завершение всех задач в tasks! но можно  использовать семафор
-                # пока оставил, чтобы сохранить в дб порядок по блокам. мб это не нужно
-
                 if tasks:
                     await asyncio.gather(*tasks)
 

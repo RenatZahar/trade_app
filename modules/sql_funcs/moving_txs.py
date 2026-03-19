@@ -11,6 +11,8 @@ from modules.logger.logger import setup_logging
 # SQL_LIMIT_BATCH_SIZE подается в функции напрямую а BLOCKS_SQL_DATA - как аргумент фунцкии - как правильно делать? 
 # надо переделывать логику. слишком медленно.
 
+logger = setup_logging(__name__)
+
 def list_tables(db_path):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -78,11 +80,11 @@ def check_table_structures(conn, table1, table2):
     # print(cols1)
     # print(cols2)
     if cols1 != cols2:
-        print(f"ВНИМАНИЕ! Структуры таблиц не совпадают!")
-        print(f"{table1}: {cols1}")
-        print(f"{table2}: {cols2}")
+        logger.warning("ВНИМАНИЕ! Структуры таблиц не совпадают!")
+        logger.warning(f"{table1}: {cols1}")
+        logger.warning(f"{table2}: {cols2}")
         return False
-    print("Структуры таблиц совпадают.")
+    logger.info("Структуры таблиц совпадают.")
     return True
 
 def get_unique_indices(conn, table_name):
@@ -101,7 +103,7 @@ def return_few_tx_wallets_to_data_table(db_path,
     Пакетно переносит все строки из source_table в target_table с помощью executemany
     и удаляет их из source_table.
     """
-    print('start return_few_tx_wallets_to_data_table (batch executemany)')
+    logger.info('start return_few_tx_wallets_to_data_table (batch executemany)')
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     try:
@@ -144,19 +146,19 @@ def return_few_tx_wallets_to_data_table(db_path,
             cursor.execute(delete_sql, ids)
 
             conn.commit()
-            print("Перенесено {} строк".format(len(rows)))
+            logger.info("Перенесено {} строк".format(len(rows)))
 
-        print("Все данные успешно возвращены из {} в {}.".format(source_table, target_table))
+        logger.info("Все данные успешно возвращены из {} в {}.".format(source_table, target_table))
 
     except Exception as e:
-        print("Ошибка при возврате данных: {}".format(e))
+        logger.error("Ошибка при возврате данных: {}".format(e))
         conn.rollback()
     finally:
         cursor.close()
         conn.close()
 
 def get_count_in_table(db_path, table_name='temp_wallets'):
-    print('start get_count_in_table')
+    logger.info('start get_count_in_table')
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -167,14 +169,14 @@ def get_count_in_table(db_path, table_name='temp_wallets'):
         conn.close()
         return count
     except Exception as e:
-        print(f"Ошибка при подсчёте записей в таблице {table_name}: {e}")
+        logger.error(f"Ошибка при подсчёте записей в таблице {table_name}: {e}")
         return None
 
 def create_target_table(db_path, target_table='few_tx_wallets', source_table='data_table'):
     """
     1. Создает новую таблицу (например, few_tx_wallets) с такой же схемой, как у исходной таблицы (data_table).
     """
-    print('start create_target_table')
+    logger.info('start create_target_table')
 
     try:
         conn = sqlite3.connect(db_path)
@@ -186,9 +188,9 @@ def create_target_table(db_path, target_table='few_tx_wallets', source_table='da
         ).format(tgt=target_table, src=source_table)
         cursor.execute(sql)
         conn.commit()
-        print(f"Таблица {target_table} создана или уже существует.")
+        logger.info(f"Таблица {target_table} создана или уже существует.")
     except Exception as e:
-        print(f"Ошибка при создании таблицы {target_table}: {e}")
+        logger.error(f"Ошибка при создании таблицы {target_table}: {e}")
         traceback.print_exc()
     finally:
         cursor.close()
@@ -200,14 +202,14 @@ def create_temp_wallets_table(db_path, txs_count, source_table='data_table', tem
     2. Создает служебную таблицу (temp_wallets) для хранения id кошельков, у которых количество транзакций ≤ txs_count.
        Если таблица уже существует, создание и заполнение пропускается.
     """
-    print('start create_temp_wallets_table')
+    logger.info('start create_temp_wallets_table')
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         # #comment: проверка наличия служебной таблицы
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?;", (temp_table,))
         if cursor.fetchone():
-            print(f"Таблица {temp_table} уже существует. Пропускаем создание и заполнение.")
+            logger.info(f"Таблица {temp_table} уже существует. Пропускаем создание и заполнение.")
             return
 
         # Создаем служебную таблицу temp_wallets
@@ -231,9 +233,9 @@ def create_temp_wallets_table(db_path, txs_count, source_table='data_table', tem
         
         cursor.execute(sql, (txs_count,))
         conn.commit()
-        print(f"Таблица {temp_table} успешно создана и заполнена.")
+        logger.info(f"Таблица {temp_table} успешно создана и заполнена.")
     except Exception as e:
-        print(f"Ошибка при создании или заполнении таблицы {temp_table}: {e}")
+        logger.error(f"Ошибка при создании или заполнении таблицы {temp_table}: {e}")
         traceback.print_exc()
     finally:
         cursor.close()
@@ -244,7 +246,7 @@ def optimize_db(db_path):
     """
     Включает режим WAL и устанавливает оптимальные параметры для ускорения операций записи.
     """
-    print('start optimize_db')
+    logger.info('start optimize_db')
 
     try:
         conn = sqlite3.connect(db_path)
@@ -256,9 +258,9 @@ def optimize_db(db_path):
         conn.commit()
         cursor.close()
         conn.close()
-        print("База данных оптимизирована: включен режим WAL, synchronous=NORMAL.")
+        logger.info("База данных оптимизирована: включен режим WAL, synchronous=NORMAL.")
     except Exception as e:
-        print(f"Ошибка при оптимизации БД: {e}")
+        logger.error(f"Ошибка при оптимизации БД: {e}")
         traceback.print_exc()
 
 def process_wallets(db_path, source_table='data_table', target_table='few_tx_wallets', 
@@ -282,7 +284,7 @@ def process_wallets(db_path, source_table='data_table', target_table='few_tx_wal
             cursor.execute("SELECT wallet_id FROM {tmp} LIMIT ?;".format(tmp=temp_table), (batch_size,))
             wallets = [row[0] for row in cursor.fetchall()]
             if not wallets:
-                print(f"Таблица {temp_table} пуста. Удаляем таблицу {temp_table}.")
+                logger.info(f"Таблица {temp_table} пуста. Удаляем таблицу {temp_table}.")
                 cursor.execute("DROP TABLE IF EXISTS {tmp};".format(tmp=temp_table))
                 conn.commit()
                 break
@@ -302,7 +304,7 @@ def process_wallets(db_path, source_table='data_table', target_table='few_tx_wal
         cursor.close()
         conn.close()
     except Exception as e:
-        print(f"Ошибка при обработке кошельков: {e}")
+        logger.error(f"Ошибка при обработке кошельков: {e}")
         traceback.print_exc()
 
 def process_wallets_batch(db_path, source_table='data_table', target_table='few_tx_wallets', 
@@ -313,7 +315,7 @@ def process_wallets_batch(db_path, source_table='data_table', target_table='few_
     - Удаляет скопированные строки из source_table.
     - Удаляет обработанные id кошельков из temp_table.
     """
-    print('start process_wallets_batch')
+    logger.info('start process_wallets_batch')
 
     if not wallet_ids:
         return
@@ -354,14 +356,14 @@ def process_wallets_batch(db_path, source_table='data_table', target_table='few_
         # print(f"Обработана порция из {len(wallet_ids)} кошельков.")
     except Exception as e:
         conn.rollback()
-        print(f"Ошибка при обработке порции кошельков {wallet_ids}: {e}")
+        logger.error(f"Ошибка при обработке порции кошельков {wallet_ids}: {e}")
         traceback.print_exc()
     finally:
         cursor.close()
         conn.close()
 
 def print_now():
-    print(f'Старт в {datetime.now()}')
+    logger.info(f'Старт в {datetime.now()}')
 
 def create_indexes(db_path):
     # создаём индекс по Wallet_id и Transaction_id во всех таблицах, где есть соответствующие столбцы
@@ -394,7 +396,7 @@ def moving_txs():
     tables = list_tables(BLOCKS_SQL_DATA)
     for tbl in tables:
         cnt = get_count_in_table(BLOCKS_SQL_DATA, table_name=tbl)
-        print(f"Таблица {tbl}: {cnt} записей")
+        logger.info(f"Таблица {tbl}: {cnt} записей")
 
     # check_db(BLOCKS_SQL_DATA)
     # create_indexes(BLOCKS_SQL_DATA)
@@ -416,12 +418,12 @@ def moving_txs():
     # Шаг 4: Порционно обрабатываем кошельки из temp_wallets
     process_wallets(BLOCKS_SQL_DATA, source_table="data_table", target_table="few_tx_wallets", temp_table="temp_wallets")
     
-    print("Работа завершена.")
+    logger.info("Работа завершена.")
 
     tables = list_tables(BLOCKS_SQL_DATA)
     for tbl in tables:
         cnt = get_count_in_table(BLOCKS_SQL_DATA, table_name=tbl)
-        print(f"Таблица {tbl}: {cnt} записей")
+        logger.info(f"Таблица {tbl}: {cnt} записей")
 
 if __name__ == "__main__":
     moving_txs()

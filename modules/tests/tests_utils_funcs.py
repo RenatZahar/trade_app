@@ -15,8 +15,8 @@ dir_for_temp_files_of_module = os.path.join(APP_TEMP_DIR, module_name_for_temp_d
 # os.makedirs(dir_for_temp_files_of_module, exist_ok=True)
 
 def test_func():
-    print(script_dir)
-    print(dir_for_temp_files_of_module)
+    logger.info(script_dir)
+    logger.info(dir_for_temp_files_of_module)
 
 
 def save_parquet(temp_name_for_files_dir):

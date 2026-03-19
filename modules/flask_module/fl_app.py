@@ -126,4 +126,4 @@ def index():
 
 
 if __name__ == '__main__':
-    print('flask app.secret_key = your_secret_key  # Необходим для flash сообщений')
+    logger.warning('flask app.secret_key = your_secret_key  # Необходим для flash сообщений')

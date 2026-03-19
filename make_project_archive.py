@@ -2,6 +2,8 @@
 import os
 import zipfile
 
+from modules.logger.logger import setup_logging
+
 # 📌 Устанавливаем рабочую директорию — корень проекта
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
@@ -24,6 +26,7 @@ ALWAYS_INCLUDE_DIRS = {
 MAX_FILE_SIZE_MB = 1
 PROJECT_ROOT = "."
 OUTPUT_ZIP = "project_clean.zip"
+logger = setup_logging(__name__)
 
 def should_include(file_path, rel_path):
     if os.path.isdir(file_path):
@@ -57,7 +60,7 @@ def zip_project():
                 if not any(os.scandir(abs_path)):  # если пусто
                     zinfo = zipfile.ZipInfo(always_dir + "/")
                     zipf.writestr(zinfo, "")
-    print(f"✅ Архив создан: {OUTPUT_ZIP} (с фильтрацией и пустыми папками)")
+    logger.info(f"Архив создан: {OUTPUT_ZIP} (с фильтрацией и пустыми папками)")
 
 if __name__ == "__main__":
     zip_project()

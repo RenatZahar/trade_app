@@ -1,4 +1,11 @@
 import sqlite3
+from pathlib import Path
+
+import pandas as pd
+
+from modules.logger.logger import setup_logging
+
+logger = setup_logging(__name__)
 
 def get_sqlite_stat1(db_path):
     try:
@@ -13,7 +20,7 @@ def get_sqlite_stat1(db_path):
         stat_data = cursor.fetchall()
         return stat_data
     except sqlite3.Error as e:
-        print(f"Ошибка при работе с базой данных: {e}")
+        logger.error(f"Ошибка при работе с базой данных: {e}")
     finally:
         if conn:
             conn.close()  # Закрываем соединение с базой данных
@@ -86,21 +93,18 @@ def display_table_info(db_path, table_name):
     """
     # Получаем информацию о столбцах
     df_columns = get_table_columns(db_path, table_name)
-    print(f"Информация о столбцах таблицы '{table_name}':")
-    print(df_columns)
-    print("\n")
+    logger.info(f"Информация о столбцах таблицы '{table_name}':")
+    logger.info(f"\n{df_columns}")
     
     # Получаем информацию об индексах
     df_indexes, index_details = get_table_indexes(db_path, table_name)
-    print(f"Список индексов таблицы '{table_name}':")
-    print(df_indexes)
-    print("\n")
+    logger.info(f"Список индексов таблицы '{table_name}':")
+    logger.info(f"\n{df_indexes}")
     
     # Подробная информация о каждом индексе
     for index_name, df_index_info in index_details:
-        print(f"Подробная информация об индексе '{index_name}':")
-        print(df_index_info)
-        print("\n")
+        logger.info(f"Подробная информация об индексе '{index_name}':")
+        logger.info(f"\n{df_index_info}")
 
 
 # Путь к файлу базы данных
@@ -108,7 +112,7 @@ BLOCKS_SQL_DATA = r"C:\blocks_sql_data\blocks_sql_data_db.db"
 table_name = 'data_table'
 
 stat_data = get_sqlite_stat1(BLOCKS_SQL_DATA)
-print("Содержимое sqlite_stat1:", stat_data)
+logger.info(f"Содержимое sqlite_stat1: {stat_data}")
 
 display_table_info(BLOCKS_SQL_DATA, table_name)
 

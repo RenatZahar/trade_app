@@ -180,9 +180,9 @@ async def async_print_db_schema(db_path, table_name='data_table'):
             result = await cursor.fetchone()
             await cursor.close()
             if result:
-                print(f"Схема таблицы '{table_name}':\n{result[0]}")
+                logger.info(f"Схема таблицы '{table_name}':\n{result[0]}")
             else:
-                print(f"Таблица '{table_name}' не найдена.")
+                logger.warning(f"Таблица '{table_name}' не найдена.")
     except Exception as e:
         logger.error(f"Ошибка при получении схемы базы данных: {e}")
 
