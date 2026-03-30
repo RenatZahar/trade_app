@@ -2,7 +2,7 @@
 
 import os
 import time
-from config import APP_TEMP_DIR
+from settings.paths import APP_TEMP_DIR
 from modules.logger.logger import setup_logging
 
 

@@ -4,7 +4,7 @@ import time
 import os
 from dask.distributed import Client, LocalCluster
 from dask.config import set as dask_set
-from config import DASK_TEMP_DIR
+from settings.dask import DASK_SETTINGS
 from modules.logger.logger import setup_logging
 from dask.distributed import wait
 
@@ -20,15 +20,7 @@ def get_dask_client(total_memory='16GB', n_workers=2, threads_per_worker=5, dash
     logging.getLogger("distributed.worker.memory").setLevel(logging.ERROR)
 
     # Настройки Dask для выгрузки данных из оперативной памяти
-    dask_set({
-        'distributed.worker.memory.target': 0.4,  # Освободить память до 40% от лимита
-        'distributed.worker.memory.spill': 0.7,   # Начать выгрузку на диск при % использования
-        'distributed.worker.memory.pause': 0.90,  # Приостановить задачи при % использования памяти
-        # 'distributed.worker.memory.recent-to-old': 0.4,  # Настройка скорости сброса данных
-        'distributed.worker.local-directory': DASK_TEMP_DIR,
-        # "dataframe.shuffle.algorithm": "tasks",
-        "dataframe.shuffle.method": "disk"
-    })
+    dask_set(DASK_SETTINGS)
     # dask.config.set({"dataframe.shuffle.method": "disk"})
 
     cluster = LocalCluster(

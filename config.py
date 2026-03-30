@@ -2,16 +2,9 @@
 
 import os
 from pathlib import Path
-from dotenv import load_dotenv
 import sys
 import colorama
 import sqlite3
-
-load_dotenv()
-
-
-BASE_DIR = Path(__file__).resolve().parent
-sys.path.append(str(BASE_DIR))
 
 
 
@@ -27,28 +20,21 @@ def _max_sql_vars():
     return 999 
 
 
-rpc_user=os.getenv('RPC_USER')
-rpc_password=os.getenv('RPC_PASSWORD')
-rpc_host=os.getenv('RPC_HOST')
-rpc_port=os.getenv('RPC_PORT')
+
 
 MIN_TXS_PER_WALLET = int(os.getenv('MIN_TXS_PER_WALLET', 5))
 TOTAL_AMOUNT_MORE_THAN_BTC = float(os.getenv('TOTAL_AMOUNT_MORE_THAN_BTC', 0.1))
 TXS_PER_WALLET_MORE_THAN = int(os.getenv('TXS_PER_WALLET_MORE_THAN', 1)) #Указывает количество транзакций, при котором кошелек считается "активным" и они не перемещаются в few_tx_wallets
 
-LINE_TIME_DURATION_MIN = int(os.getenv('LINE_TIME_DURATION_MIN', 10))
 TRAINED_MODELS_DIR =  BASE_DIR / Path(os.getenv('TRAINED_MODELS_DIR', 'data\\models\\trained_models'))
 REDIS_PROCESS_NAME = "redis-server.exe"  # Имя процесса Redis для Windows
 # REDIS_EXECUTABLE_PATH = os.getenv('REDIS_EXECUTABLE_PATH', 'C:\\Redis\\redis-server.exe')  # Путь к redis-server.exe
 REDIS_EXECUTABLE_PATH  = os.getenv('REDIS_EXECUTABLE_PATH', 'C:\\Program Files\\Redis\\redis-server.exe')
 
 RAW_BTC_PRICE_DIR_FILE = BASE_DIR / Path(os.getenv('RAW_BTC_PRICE_DIR_FILE', 'data/bitcoin_price/raw_btc_price/BTCUSDT.csv.gz'))
-TXS_PARQUET_DIR = BASE_DIR / Path(os.getenv('TXS_DIR', 'data/blocks_parquet_data'))
-CLEARED_PRICES_DIR = BASE_DIR / Path(os.getenv('CLEARED_PRICES_DIR', 'data/bitcoin_price/cleared_btc_price'))
-CLEARED_PRICES_NAME_FILE = f'smoothed_BTCUSDT_{LINE_TIME_DURATION_MIN}min.parquet'
+# TXS_PARQUET_DIR = BASE_DIR / Path(os.getenv('TXS_DIR', 'data/blocks_parquet_data'))
+# CLEARED_PRICES_DIR = BASE_DIR / Path(os.getenv('CLEARED_PRICES_DIR', 'data/bitcoin_price/cleared_btc_price'))
 
-CLEARED_PRICES_DIR_FILE = CLEARED_PRICES_DIR / CLEARED_PRICES_NAME_FILE
-BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE = BASE_DIR / Path(os.getenv('BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE', 'data\bitcoin_price\btc_price_df_with_intervals\btc_price_df_with_intervals.parquet'))
 
 
 NEW_MODELS_PATH  = BASE_DIR / Path(os.getenv('NEW_MODELS_PATH', 'data/models/new_models'))

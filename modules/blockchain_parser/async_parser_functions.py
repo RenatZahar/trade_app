@@ -29,7 +29,7 @@ from modules.redis_init.redis_init import send_message
 
 from config import CLEARED_PRICES_DIR, rpc_user, rpc_password, rpc_host, rpc_port # type: ignore #переменные подгружаются корректно, проблема в папках
 from modules.logger.logger import setup_logging
-from .config import (
+from settings.parser import (
     REQUESTS_QUANTITY,
     MIN_VALUE_THRESHOLD,
     MAX_LINES_IN_TX_CACHE,

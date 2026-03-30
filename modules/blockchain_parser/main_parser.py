@@ -11,8 +11,9 @@ from modules.redis_init.redis_init import send_message
 from . import async_parser_functions as apf
 # import tests
 from modules.logger.logger import setup_logging
-from config import BLOCKS_SQL_DATA, CLEARED_PRICES_DIR, rpc_user, rpc_password, rpc_host, rpc_port # type: ignore #переменные подгружаются корректно, проблема в папках
-from .config import QUANTITY_OF_BLOCKS_IN_ITERATION, MAX_ITERATIONS, START_BLOCK, PROBLEM_BLOCKS_LIST
+from settings.runtime import rpc_user, rpc_password, rpc_host, rpc_port
+from settings.paths import BLOCKS_SQL_DATA, CLEARED_PRICES_DIR # type: ignore #переменные подгружаются корректно, проблема в папках
+from settings.parser import QUANTITY_OF_BLOCKS_IN_ITERATION, MAX_ITERATIONS, START_BLOCK, PROBLEM_BLOCKS_LIST
 BASE_DIR = Path(__file__).resolve().parent
 
 logger = setup_logging(__name__)

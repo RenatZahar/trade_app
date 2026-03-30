@@ -3,7 +3,7 @@
 import os
 import pandas as pd
 import sqlite3
-from config import TXS_PARQUET_DIR, BLOCKS_SQL_DATA
+from settings.paths import TXS_PARQUET_DIR, BLOCKS_SQL_DATA
 from modules.logger.logger import setup_logging
 import time
 
