@@ -11,11 +11,19 @@ import json
 import requests
 import sqlite3
 
-from bitcoinrpc.authproxy import JSONRPCException
-from bitcoinrpc.authproxy import AuthServiceProxy
+from bitcoinrpc.authproxy import JSONRPCException, AuthServiceProxy
 
-from config import rpc_user, rpc_password, rpc_host, rpc_port, BLOCKS_SQL_DATA
 from modules.logger.logger import setup_logging
+from settings.paths import BLOCKS_SQL_DATA
+from settings.runtime import (
+    BITCOIN_CORE_PATH,
+    BITCOIN_CORE_PROCESS_NAME,
+    DATA_BLOCKCHAIN_DIR,
+    rpc_host,
+    rpc_password,
+    rpc_port,
+    rpc_user,
+)
 
 logger = setup_logging(__name__)
 
@@ -25,7 +33,7 @@ def get_rpc_connection(rpc_user, rpc_password, rpc_host, rpc_port):
     rpc_connection = AuthServiceProxy(rpc_url, timeout=1200)
     return rpc_connection
 
-def get_btc_status(process_name=os.getenv('BITCOIN_CORE_PROCESS_NAME')):  #функция для вызова из main
+def get_btc_status(process_name=BITCOIN_CORE_PROCESS_NAME):  #функция для вызова из main
     # logger.info(f"Старт get_btc_status.")
     while True:
         try:
@@ -49,14 +57,14 @@ def is_bitcoin_core_running(process_name):
     logger.info(f"{process_name} не найден в процессах.")
     return False
 
-def start_bitcoin_core(rpc_connection, process_path=os.getenv('BITCOIN_CORE_PATH'), DATA_BLOCKCHAIN_DIR=os.getenv('DATA_BLOCKCHAIN_DIR')):
+def start_bitcoin_core(rpc_connection, process_path=BITCOIN_CORE_PATH, data_blockchain_dir=DATA_BLOCKCHAIN_DIR):
     # Запуск Bitcoin Core с параметром -datadir
     if not process_path:
         logger.error("Переменная окружения BITCOIN_CORE_PATH не задана.")
         return False
     try:
-        subprocess.Popen([process_path, f"-datadir={DATA_BLOCKCHAIN_DIR}"])
-        logger.info(f"{process_path} был запущен с параметром -datadir={DATA_BLOCKCHAIN_DIR}.")
+        subprocess.Popen([process_path, f"-datadir={data_blockchain_dir}"])
+        logger.info(f"{process_path} был запущен с параметром -datadir={data_blockchain_dir}.")
         btc_core_status = check_ready_btc_core_for_work(rpc_connection)
         return btc_core_status
 

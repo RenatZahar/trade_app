@@ -6,18 +6,12 @@ Operational notes and backlog for this file were moved to:
 
 import argparse
 import os
-import sys
-
-from dotenv import load_dotenv
 
 import main_functions as mf
 from modules.logger.logger import setup_logging
 from modules.sql_funcs.moving_txs import moving_txs
 from modules.tests.converge_of_elasticnet import converge_of_elasticnet
 from modules.finding_price_peaks.get_price_peaks_df import update_peaks
-
-load_dotenv()
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 EPILOG=(
     "Test modes:\n"

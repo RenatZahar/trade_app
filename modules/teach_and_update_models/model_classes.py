@@ -26,9 +26,10 @@ from operator import itemgetter
 from dask.delayed import delayed
 from datetime import datetime, timedelta
 from dask.distributed import as_completed
-from config import BLOCKS_SQL_DATA, TRAINED_MODELS_DIR, TOTAL_AMOUNT_MORE_THAN_BTC, MIN_TXS_PER_WALLET, BLOCK_HEIGHT_BLOCK_TIME_MAP_DIR_FILE
 from modules.logger.logger import setup_logging
 from modules.dask_client_init.get_dask_client import get_dask_client
+from settings.data_operations import MIN_TXS_PER_WALLET, TOTAL_AMOUNT_MORE_THAN_BTC
+from settings.paths import BLOCK_HEIGHT_BLOCK_TIME_MAP_DIR_FILE, BLOCKS_SQL_DATA, TRAINED_MODELS_DIR
 
 from . import service_funcs as sf
 from . import data_operations as do

@@ -7,8 +7,8 @@ import os
 import redis
 import threading
 import time
-from config import REDIS_PROCESS_NAME, REDIS_EXECUTABLE_PATH
 from modules.logger.logger import setup_logging
+from settings.runtime import REDIS_EXECUTABLE_PATH, REDIS_PROCESS_NAME
 
 logger = setup_logging(__name__)
 

@@ -6,13 +6,19 @@ from datetime import datetime, timedelta
 import os
 import sqlite3
 from .price_updater import get_price_data
-from config import LINE_TIME_DURATION_MIN, RAW_BTC_PRICE_DIR_FILE, CLEARED_PRICES_DIR, BLOCKS_SQL_DATA, CLEARED_PRICES_NAME_FILE # type: ignore #переменные подгружаются корректно, проблема в папках
 from modules.logger.logger import setup_logging
+from settings.paths import (
+    BLOCKS_SQL_DATA,
+    CLEARED_PRICES_DIR,
+    RAW_BTC_PRICE_DIR_FILE,
+)
+from settings.price_peaks import line_time_duration_min as LINE_TIME_DURATION_MIN
 import gc
 
 logger = setup_logging(__name__)
 
 LINE_TIME_DURATION_SEC = LINE_TIME_DURATION_MIN*60
+CLEARED_PRICES_NAME_FILE = f"smoothed_BTCUSDT_{LINE_TIME_DURATION_MIN}min.parquet"
 
 def clean_gzip_df(df):
      # print(btc_price_data.to_string())

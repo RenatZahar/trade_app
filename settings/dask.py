@@ -1,4 +1,4 @@
-from settings.paths import DASK_TEMP_DIR
+from settings.runtime import DASK_TEMP_DIR
 
 
 DASK_SETTINGS = {

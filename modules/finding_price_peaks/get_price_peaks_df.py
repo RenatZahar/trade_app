@@ -5,13 +5,15 @@ import pandas as pd
 import modules.finding_price_peaks.price_peaks_func as pnt
 from modules.logger.logger import setup_logging
 
-from settings.paths import CLEARED_PRICES_DIR_FILE, BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE
+from settings.paths import CLEARED_PRICES_DIR, BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE
 from settings.price_peaks import cicle, price_diff_pct, plato, line_time_duration_min
 
 
 logger = setup_logging(__name__)
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
+
+CLEARED_PRICES_DIR_FILE = CLEARED_PRICES_DIR / f"smoothed_BTCUSDT_{line_time_duration_min}min.parquet"
 
 def update_peaks():
     logger.warning('сделать раз в день перезапуск get_peaks')
