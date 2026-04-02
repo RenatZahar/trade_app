@@ -8,7 +8,7 @@ from db_servise_funcs import (
     async_print_db_schema,
     async_alter_table_set_primary_key
 )
-from config import BLOCKS_SQL_DATA  # Убедитесь, что пути корректны
+from settings.paths import BLOCKS_SQL_DATA
 # проверить чтобы все действия были реализованы через копирование на диск С. 
 
 logger = setup_logging(__name__)

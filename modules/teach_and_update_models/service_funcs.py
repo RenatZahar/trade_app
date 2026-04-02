@@ -13,8 +13,14 @@ from pathlib import Path
 from datetime import datetime
 from sklearn.model_selection import ParameterGrid
 
-from config import BLOCKS_SQL_DATA, NEW_MODELS_PATH, BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE, TRAINED_MODELS_DIR, NEW_PARAM_GRID_DIR, PARAM_GRID_DIR
 from modules.logger.logger import setup_logging
+from settings.paths import (
+    BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE,
+    NEW_MODELS_PATH,
+    NEW_PARAM_GRID_DIR,
+    PARAM_GRID_DIR,
+    TRAINED_MODELS_DIR,
+)
 from . import service_funcs as sf
 from . import data_operations as do
 

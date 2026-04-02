@@ -4,15 +4,13 @@ import time
 import threading
 import asyncio
 import os
-import sys
 import asyncio
 import shutil
 import json
 
-from dotenv import load_dotenv
 from modules.redis_init.redis_init import send_message, waiting_for_message
 
-from config import APP_TEMP_DIR, NEW_MODELS_PATH
+from settings.paths import APP_TEMP_DIR, NEW_MODELS_PATH
 from modules.logger.logger import setup_logging
 from modules.btc_core_init.btc_core_manager import get_btc_status, blocks_to_download
 from modules.blockchain_parser.main_parser  import parser
@@ -21,8 +19,6 @@ from modules.redis_init.redis_init import get_redis_status, start_redis_client
 from modules.teach_and_update_models.service_funcs import check_for_new_models
 from modules.teach_and_update_models.orchestrator import teach_model, teaching_with_param_grid_orchestrator
 from modules.flask_module.fl_app import app as flask_app
-
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 logger = setup_logging(__name__)
 
 parser_running = False

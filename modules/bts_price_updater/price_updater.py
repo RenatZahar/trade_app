@@ -2,6 +2,7 @@ import time
 import requests
 import os
 from modules.logger.logger import setup_logging
+from settings.price_updater import BINANСE_API_URL
 
 logger = setup_logging(__name__)
 
@@ -11,7 +12,7 @@ def get_price_data(start_time_ms, end_time_ms):
     interval = '1m'  # Интервал свечи 1 минута
     limit = 1000     # Максимальное количество записей за один запрос
 
-    url = 'https://api.binance.com/api/v3/klines'
+    url = BINANСE_API_URL + '/api/v3/klines'
     all_data = []
 
     while start_time_ms < end_time_ms:

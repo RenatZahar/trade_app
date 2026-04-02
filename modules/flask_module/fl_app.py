@@ -2,7 +2,6 @@
 
 import os
 import time
-from config import BLOCKS_SQL_DATA
 from modules.logger.logger import setup_logging
 import os
 import pandas as pd

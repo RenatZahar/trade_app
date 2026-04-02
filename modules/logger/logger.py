@@ -3,8 +3,7 @@
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
-from pathlib import Path
-from config import BASE_DIR
+from settings.paths import BASE_DIR
 
 LOGS_DIR = BASE_DIR / "logs"
 FILE_LOG_FORMAT = "%(asctime)s [%(levelname)s] [%(name)s] %(message)s"

@@ -4,8 +4,8 @@ import os
 import time
 import pandas as pd
 import dask.dataframe as dd
-from config import BLOCKS_SQL_DATA, APP_TEMP_DIR
 from modules.logger.logger import setup_logging
+from settings.paths import APP_TEMP_DIR, BLOCKS_SQL_DATA
 
 logger = setup_logging(__name__)
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -23,3 +23,4 @@ def test_func():
 
     # ожидаем явное завершение всех задач в tasks! но можно  использовать семафор
     # пока оставил, чтобы сохранить в дб порядок по блокам. мб это не нужно
+    pass

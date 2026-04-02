@@ -3,15 +3,17 @@ import time
 import os
 import pandas as pd
 import modules.finding_price_peaks.price_peaks_func as pnt
-from config import CLEARED_PRICES_DIR_FILE, BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE, LINE_TIME_DURATION_MIN
 from modules.logger.logger import setup_logging
-from .config import how_much_data_test_after_learning_mounth, cicle, price_diff_pct, plato
+
+from settings.paths import CLEARED_PRICES_DIR, BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE
+from settings.price_peaks import cicle, price_diff_pct, plato, line_time_duration_min
 
 
 logger = setup_logging(__name__)
-# BASE_DIR = Path(__file__).resolve().parent
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
+
+CLEARED_PRICES_DIR_FILE = CLEARED_PRICES_DIR / f"smoothed_BTCUSDT_{line_time_duration_min}min.parquet"
 
 def update_peaks():
     logger.warning('сделать раз в день перезапуск get_peaks')
@@ -27,7 +29,7 @@ def update_peaks():
     else:
         btc_price_df = pnt.get_btc_prices(CLEARED_PRICES_DIR_FILE)
         btc_price_df["Buy"], btc_price_df["Sell"] = 0, 0
-        btc_price_data_with_peaks = pnt.analyze_with_parameters(btc_price_df, cicle, price_diff_pct, plato, LINE_TIME_DURATION_MIN)
+        btc_price_data_with_peaks = pnt.analyze_with_parameters(btc_price_df, cicle, price_diff_pct, plato, line_time_duration_min)
         logger.info('Пики в get_peaks найдены, крайие строки:')
         logger.info(btc_price_data_with_peaks.head(3))
         logger.info(btc_price_data_with_peaks.tail(3))

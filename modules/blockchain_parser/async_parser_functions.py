@@ -27,15 +27,16 @@ import sys
 
 from modules.redis_init.redis_init import send_message
 
-from config import CLEARED_PRICES_DIR, rpc_user, rpc_password, rpc_host, rpc_port # type: ignore #переменные подгружаются корректно, проблема в папках
 from modules.logger.logger import setup_logging
-from .config import (
+from settings.paths import CLEARED_PRICES_DIR
+from settings.parser import (
     REQUESTS_QUANTITY,
     MIN_VALUE_THRESHOLD,
     MAX_LINES_IN_TX_CACHE,
     MAX_LINES_IN_HASH_CACHE,
     MAX_SAVE_TASKS
     )
+from settings.runtime import rpc_host, rpc_password, rpc_port, rpc_user
 
 sqlite3.register_adapter(np.int32, int)
 sqlite3.register_adapter(np.int64, int)

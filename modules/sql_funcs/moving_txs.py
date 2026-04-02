@@ -5,7 +5,8 @@ import traceback
 import time
 import sys
 from datetime import datetime
-from config import BLOCKS_SQL_DATA, TXS_PER_WALLET_MORE_THAN, SQL_LIMIT_BATCH_SIZE
+from settings.paths import BLOCKS_SQL_DATA
+from settings.sql import SQL_LIMIT_BATCH_SIZE, TXS_PER_WALLET_MORE_THAN
 from modules.logger.logger import setup_logging
 
 # SQL_LIMIT_BATCH_SIZE подается в функции напрямую а BLOCKS_SQL_DATA - как аргумент фунцкии - как правильно делать? 

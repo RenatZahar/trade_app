@@ -41,3 +41,4 @@ Thumbs.db
 *.log
 
 data_operations.py
+make_project_archive.py

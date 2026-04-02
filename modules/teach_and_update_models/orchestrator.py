@@ -6,9 +6,9 @@ from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import random
 
-from config import NEW_PARAM_GRID_DIR, PARAM_GRID_DIR, PARAM_GRID_RESULTS
 from modules.logger.logger import setup_logging
 import main_functions as mf
+from settings.paths import NEW_PARAM_GRID_DIR, PARAM_GRID_DIR, PARAM_GRID_RESULTS
 from . import service_funcs as sf
 from . import data_operations as do
 from . import model_classes as mc
