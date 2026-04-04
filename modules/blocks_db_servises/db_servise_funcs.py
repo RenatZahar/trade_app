@@ -12,9 +12,9 @@ import aiosqlite
 import asyncio
 import time
 from functools import wraps
-from modules.logger.logger import setup_logging
 
-logger = setup_logging(__name__)
+import logging
+logger = logging.getLogger("app")
 
 def retry(max_attempts=3, delay=1, exceptions=(Exception,)):
     def decorator(func):
@@ -185,4 +185,5 @@ async def async_print_db_schema(db_path, table_name='data_table'):
                 logger.warning(f"Таблица '{table_name}' не найдена.")
     except Exception as e:
         logger.error(f"Ошибка при получении схемы базы данных: {e}")
+
 

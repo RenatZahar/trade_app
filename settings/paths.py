@@ -27,6 +27,8 @@ BLOCKS_SQL_DATA = BASE_DIR / 'data/blocks_sql_data/blocks_sql_data_db.db' #эт�
 
 BLOCK_HEIGHT_BLOCK_TIME_MAP_DIR_FILE = BASE_DIR / 'data/block_height_block_time_map/map.parquet'
 
+INIT_NUMBER_FILE_NAME = 'counter.txt'
+INIT_NUMBER_FILE_DIR = BASE_DIR / 'data/logger_count'
 # эти нужны?
 # TXS_PARQUET_DIR = BASE_DIR / Path(os.getenv('TXS_DIR', 'data/blocks_parquet_data'))
 # CLEARED_PRICES_DIR = BASE_DIR / Path(os.getenv('CLEARED_PRICES_DIR', 'data/bitcoin_price/cleared_btc_price'))

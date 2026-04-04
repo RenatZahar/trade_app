@@ -7,19 +7,17 @@ import os
 import asyncio
 import shutil
 import json
+import logging
 
 from modules.redis_init.redis_init import send_message, waiting_for_message
 
 from settings.paths import APP_TEMP_DIR, NEW_MODELS_PATH
-from modules.logger.logger import setup_logging
 from modules.btc_core_init.btc_core_manager import get_btc_status, blocks_to_download
 from modules.blockchain_parser.main_parser  import parser
-from modules.bts_price_updater.raw_prices_cleaning import clean_raw_data
 from modules.redis_init.redis_init import get_redis_status, start_redis_client
-from modules.teach_and_update_models.service_funcs import check_for_new_models
-from modules.teach_and_update_models.orchestrator import teach_model, teaching_with_param_grid_orchestrator
-from modules.flask_module.fl_app import app as flask_app
-logger = setup_logging(__name__)
+
+logger = logging.getLogger('app')
+
 
 parser_running = False
 parser_lock = threading.Lock()
@@ -40,10 +38,14 @@ def start_redis():
     if status:
         start_redis_client()
         logger.info("Redis успешно запущен и работает.")
+        return True
     else:
         logger.error("Не удалось запустить Redis.")
+        return False
 
 def start_btc_price_updater():
+    from modules.bts_price_updater.raw_prices_cleaning import clean_raw_data
+
     clean_raw_data()
     # пока сделал не в отдельном потоке - чтобы пики корректно отработали
     # clean_raw_data_thread = threading.Thread(target=clean_raw_data)
@@ -52,7 +54,8 @@ def start_btc_price_updater():
 
 def start_btc_core_monitor_and_parser():
     logger.info("Старт mf.btc_status_monitor")
-
+    if not start_redis(): #не нравится конструкция, переписать
+        raise RuntimeError("Redis client initialization failed before parser startup.")
     waiting_for_message('check_btc_core_status_line', check_parser_status)
     monitor_thread = threading.Thread(target=btc_status_monitor)
     monitor_thread.daemon = True
@@ -94,6 +97,9 @@ def run_parser_asyncio():
 
 
 def teach_and_update_models(TEACHING_TEST):
+    from modules.teach_and_update_models.service_funcs import check_for_new_models
+    from modules.teach_and_update_models.orchestrator import teach_model
+
     resave_json_with_indend()
     model_type_data, model_type, model_info, model_dir_file = check_for_new_models() # type: ignore #возврат str (json или prl) и model_info или pkl модели
     teach_model(model_type_data, model_type, model_info, model_dir_file, TEACHING_TEST)
@@ -119,6 +125,8 @@ def clear_all_temp_directory():
 
 def start_flask():
     """Запускает Flask-приложение в отдельном потоке"""
+    from modules.flask_module.fl_app import app as flask_app
+
     def run_flask():
         flask_app.run(debug=False, host='127.0.0.1', port=5000, use_reloader=False)
     
@@ -143,6 +151,8 @@ def resave_json_with_indend():
                 json.dump(data, f, indent=4, ensure_ascii=False)
 
 def test_param_grid(TEACHING_TEST):
+    from modules.teach_and_update_models.orchestrator import teaching_with_param_grid_orchestrator
+
     teaching_with_param_grid_orchestrator(TEACHING_TEST)
 
 def clear_temp_directory_of_module(module_name):
@@ -164,3 +174,4 @@ def clear_temp_directory_of_module(module_name):
                 logger.info(f"Папка удалена: {file_path}")
         except Exception as e:
             logger.error(f"Не удалось удалить {file_path}. Причина: {e}")
+

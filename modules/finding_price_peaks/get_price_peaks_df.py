@@ -3,13 +3,13 @@ import time
 import os
 import pandas as pd
 import modules.finding_price_peaks.price_peaks_func as pnt
-from modules.logger.logger import setup_logging
 
 from settings.paths import CLEARED_PRICES_DIR, BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE
 from settings.price_peaks import cicle, price_diff_pct, plato, line_time_duration_min
 
 
-logger = setup_logging(__name__)
+import logging
+logger = logging.getLogger("app")
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
 
@@ -37,4 +37,5 @@ def update_peaks():
 
 if __name__ == '__main__':
     update_peaks()
+
 

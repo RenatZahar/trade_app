@@ -27,7 +27,6 @@ import sys
 
 from modules.redis_init.redis_init import send_message
 
-from modules.logger.logger import setup_logging
 from settings.paths import CLEARED_PRICES_DIR
 from settings.parser import (
     REQUESTS_QUANTITY,
@@ -58,7 +57,8 @@ rpc_lock = asyncio.Lock()
 print_lock = asyncio.Lock()
 
 save_semaphore = asyncio.Semaphore(MAX_SAVE_TASKS) #пока дожидаемся сохранения перед след циклом загрузки
-logger = setup_logging(__name__)
+import logging
+logger = logging.getLogger("app")
     
 def retry(max_attempts=3, delay=1, exceptions=(Exception,)):
     def decorator(func):
@@ -858,3 +858,4 @@ def end_of_anliz_processes(profiler):
     profiler.disable()
     stats = pstats.Stats(profiler)
     stats.sort_stats('cumtime').print_stats(30)
+

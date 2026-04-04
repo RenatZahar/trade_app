@@ -7,10 +7,9 @@ import os
 import redis
 import threading
 import time
-from modules.logger.logger import setup_logging
 from settings.runtime import REDIS_EXECUTABLE_PATH, REDIS_PROCESS_NAME
 
-logger = setup_logging(__name__)
+logger = logging.getLogger("app")
 
 redis_client = None
 
@@ -67,3 +66,4 @@ def waiting_for_message(channel, message_handler):
                 threading.Thread(target=message_handler, args=(message['data'].decode(),)).start()
 
     threading.Thread(target=listen, daemon=True).start()
+

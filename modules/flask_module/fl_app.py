@@ -2,7 +2,6 @@
 
 import os
 import time
-from modules.logger.logger import setup_logging
 import os
 import pandas as pd
 import plotly.graph_objs as go
@@ -11,7 +10,8 @@ from plotly.offline import plot
 from flask import Flask, render_template, request, flash
 from pathlib import Path
 
-logger = setup_logging(__name__)
+import logging
+logger = logging.getLogger("app")
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
 
@@ -126,3 +126,4 @@ def index():
 
 if __name__ == '__main__':
     logger.warning('flask app.secret_key = your_secret_key  # Необходим для flash сообщений')
+

@@ -40,5 +40,7 @@ Thumbs.db
 *.png
 *.log
 
+data/logger_count/
+
 data_operations.py
 make_project_archive.py

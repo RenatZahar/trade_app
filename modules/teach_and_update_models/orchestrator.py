@@ -6,20 +6,23 @@ from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import random
 
-from modules.logger.logger import setup_logging
+import modules.logger.logger as app_logger_module
+from modules.logger.run_tracker import get_current_run_tracker
 import main_functions as mf
 from settings.paths import NEW_PARAM_GRID_DIR, PARAM_GRID_DIR, PARAM_GRID_RESULTS
 from . import service_funcs as sf
 from . import data_operations as do
 from . import model_classes as mc
  
-logger = setup_logging(__name__)
+import logging
+logger = logging.getLogger("app")
 script_dir = os.path.dirname(os.path.abspath(__file__))
 module_name_for_temp_dir = __name__.replace('.', '_')
 
 os.chdir(script_dir)
 
 def main_processing_model_orchestra(model, TEST):
+    tracker = get_current_run_tracker()
     # mf.clear_temp_directory_of_module(module_name_for_temp_dir)
 
     # ДОБАВИТЬ В ПАРАМЕТРЫ МОДЕЛИ ПАРАМЕТРЫ ЗАТУХАНИЯ ДЛЯ ТЕСТА В ПАРАМ ГРИД. ПЕРЕДЕЛАТЬ ФУНКЦИЮ ТЕСТИРОВАНИЯ ПАРАМ ГРИДА ПОД РАЗНЫЕ
@@ -39,27 +42,62 @@ def main_processing_model_orchestra(model, TEST):
     filter_params = model.filter_params
     correlation_type = model.correlation_params.get('correlation_type', None).lower()
     for iteration, tmps in model.tmsps_data.items():
-        logger.info(f'\033[34mStart main teaching iteration {iteration} of {len(model.tmsps_data)}\033[0m')
-        logger.info(f'Models Time data: {tmps}')
+        try:
+            logger.info(f'\033[34mStart main teaching iteration {iteration} of {len(model.tmsps_data)}\033[0m')
+            logger.info(f'Models Time data: {tmps}')
 
-        cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test  = do.get_corelation_by_tmsp_df(TEST, filter_params, correlation_type, tmps, chunk_size)
-        cor_data_in_iteration_to_teach = do.clean_data(cor_data_in_iteration_to_teach)
-    
-        if cor_data_in_iteration_to_profit_test.empty:
-            logger.info("Empty profit test data. Stop teaching.")
-            continue
-        cor_data_in_iteration_to_profit_test = do.clean_data(cor_data_in_iteration_to_profit_test)
+            if tracker:
+                stage_data = tracker.start_stage('features.correlation_data')
+                app_logger_module.log_tracker_stage_started(tracker, stage_data)
+            cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test  = do.get_corelation_by_tmsp_df(TEST, filter_params, correlation_type, tmps, chunk_size)
+            cor_data_in_iteration_to_teach = do.clean_data(cor_data_in_iteration_to_teach)
+        
+            if cor_data_in_iteration_to_profit_test.empty:
+                if tracker:
+                    stage_data = tracker.finish_stage('success', details=f'iteration={iteration} profit_test_data_empty')
+                    app_logger_module.log_tracker_stage_finished(tracker, stage_data)
+                logger.info("Empty profit test data. Stop teaching.")
+                continue
+            cor_data_in_iteration_to_profit_test = do.clean_data(cor_data_in_iteration_to_profit_test)
+            if tracker:
+                stage_data = tracker.finish_stage('success', details=f'iteration={iteration}')
+                app_logger_module.log_tracker_stage_finished(tracker, stage_data)
 
-        # cor_data_in_iteration_to_teach.to_parquet('cor_data_in_iteration_to_teach.parquet')
-        # cor_data_in_iteration_to_profit_test.to_parquet('cor_data_in_iteration_to_profit_test.parquet')
+            # cor_data_in_iteration_to_teach.to_parquet('cor_data_in_iteration_to_teach.parquet')
+            # cor_data_in_iteration_to_profit_test.to_parquet('cor_data_in_iteration_to_profit_test.parquet')
 
-        model.train_model_specific(cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test)
-        profit = model.calculate_total_value(cor_data_in_iteration_to_profit_test)
-        logger.info(f'\033[34mResult of profit test of {iteration} iteration: {profit}\033[0m')
-        model.save_model(iteration)
+            if tracker:
+                stage_data = tracker.start_stage('train.model_fit')
+                app_logger_module.log_tracker_stage_started(tracker, stage_data)
+            model.train_model_specific(cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test)
+            if tracker:
+                stage_data = tracker.finish_stage('success', details=f'iteration={iteration}')
+                app_logger_module.log_tracker_stage_finished(tracker, stage_data)
 
-        # mf.clear_temp_directory()
-        gc.collect()
+            if tracker:
+                stage_data = tracker.start_stage('evaluate.profit_test')
+                app_logger_module.log_tracker_stage_started(tracker, stage_data)
+            profit = model.calculate_total_value(cor_data_in_iteration_to_profit_test)
+            if tracker:
+                stage_data = tracker.finish_stage('success', details=f'iteration={iteration} profit={profit}')
+                app_logger_module.log_tracker_stage_finished(tracker, stage_data)
+            logger.info(f'\033[34mResult of profit test of {iteration} iteration: {profit}\033[0m')
+
+            if tracker:
+                stage_data = tracker.start_stage('artifact.model_save')
+                app_logger_module.log_tracker_stage_started(tracker, stage_data)
+            model.save_model(iteration)
+            if tracker:
+                stage_data = tracker.finish_stage('success', details=f'iteration={iteration}')
+                app_logger_module.log_tracker_stage_finished(tracker, stage_data)
+
+            # mf.clear_temp_directory()
+            gc.collect()
+        except Exception as e:
+            if tracker:
+                stage_data = tracker.finish_stage('error', details=f'iteration={iteration} error={e}')
+                app_logger_module.log_tracker_stage_finished(tracker, stage_data)
+            raise
     
     # sf.move_init_data(model)
 
@@ -199,4 +237,5 @@ def teach_model_from_json(model_type, model_info, init_dir_file, TEACHING_TEST):
         raise ValueError(f"Модель типа {model_type} не поддерживается.")
     model.init_dir_file = init_dir_file
     main_processing_model_orchestra(model, TEACHING_TEST)
+
 

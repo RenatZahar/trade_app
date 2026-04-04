@@ -3,9 +3,9 @@ import traceback
 from pathlib import Path
 import pandas as pd
 
-from modules.logger.logger import setup_logging
 
-logger = setup_logging(__name__)
+import logging
+logger = logging.getLogger("app")
 
 
 def get_all_table_names(db_path):
@@ -323,3 +323,4 @@ if __name__ == "__main__":
     recreate_indexes(BLOCKS_SQL_DATA)  # пересоздание индексов для всех таблиц
     
     logger.info("Работа завершена.")
+

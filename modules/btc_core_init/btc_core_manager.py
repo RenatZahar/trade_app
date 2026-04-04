@@ -13,7 +13,6 @@ import sqlite3
 
 from bitcoinrpc.authproxy import JSONRPCException, AuthServiceProxy
 
-from modules.logger.logger import setup_logging
 from settings.paths import BLOCKS_SQL_DATA
 from settings.runtime import (
     BITCOIN_CORE_PATH,
@@ -25,7 +24,8 @@ from settings.runtime import (
     rpc_user,
 )
 
-logger = setup_logging(__name__)
+import logging
+logger = logging.getLogger("app")
 
 def get_rpc_connection(rpc_user, rpc_password, rpc_host, rpc_port):
     rpc_url = f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}"
@@ -121,4 +121,5 @@ def blocks_to_download():
     else:
         new_blocks = False
     return new_blocks
+
 
