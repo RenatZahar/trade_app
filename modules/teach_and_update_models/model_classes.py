@@ -26,7 +26,6 @@ from operator import itemgetter
 from dask.delayed import delayed
 from datetime import datetime, timedelta
 from dask.distributed import as_completed
-from modules.logger.logger import setup_logging
 from modules.dask_client_init.get_dask_client import get_dask_client
 from settings.data_operations import MIN_TXS_PER_WALLET, TOTAL_AMOUNT_MORE_THAN_BTC
 from settings.paths import BLOCK_HEIGHT_BLOCK_TIME_MAP_DIR_FILE, BLOCKS_SQL_DATA, TRAINED_MODELS_DIR
@@ -34,7 +33,8 @@ from settings.paths import BLOCK_HEIGHT_BLOCK_TIME_MAP_DIR_FILE, BLOCKS_SQL_DATA
 from . import service_funcs as sf
 from . import data_operations as do
 
-logger = setup_logging(__name__)
+import logging
+logger = logging.getLogger("app")
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
 
@@ -319,3 +319,4 @@ class ElasticNetModel(GeneralModel):
 #     # Предположим, что у вас есть данные X и y
 #     X, y = get_training_data()
 #     model.train(X, y)
+

@@ -4,10 +4,10 @@ import os
 import time
 import pandas as pd
 import dask.dataframe as dd
-from modules.logger.logger import setup_logging
 from settings.paths import APP_TEMP_DIR, BLOCKS_SQL_DATA
 
-logger = setup_logging(__name__)
+import logging
+logger = logging.getLogger("app")
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
 module_name_for_temp_dir = __name__.replace('.', '_')
@@ -31,3 +31,4 @@ def check_pandas_obj_type(obj):
         return pd.DataFrame
     elif isinstance(obj, str):
         return str
+

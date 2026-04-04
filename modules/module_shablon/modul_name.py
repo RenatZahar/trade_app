@@ -3,10 +3,10 @@
 import os
 import time
 from settings.paths import APP_TEMP_DIR
-from modules.logger.logger import setup_logging
 
 
-logger = setup_logging(__name__)
+import logging
+logger = logging.getLogger("app")
 script_dir = os.path.dirname(os.path.abspath(__file__))
 module_name_for_temp_dir = __name__.replace('.', '_')
 dir_for_temp_files_of_module = os.path.join(APP_TEMP_DIR, module_name_for_temp_dir)
@@ -18,3 +18,4 @@ def modul():
 
 if __name__ == '__main__':
     modul()
+

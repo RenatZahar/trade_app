@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 import os
 import sqlite3
 from .price_updater import get_price_data
-from modules.logger.logger import setup_logging
 from settings.paths import (
     BLOCKS_SQL_DATA,
     CLEARED_PRICES_DIR,
@@ -15,7 +14,8 @@ from settings.paths import (
 from settings.price_peaks import line_time_duration_min as LINE_TIME_DURATION_MIN
 import gc
 
-logger = setup_logging(__name__)
+import logging
+logger = logging.getLogger("app")
 
 LINE_TIME_DURATION_SEC = LINE_TIME_DURATION_MIN*60
 CLEARED_PRICES_NAME_FILE = f"smoothed_BTCUSDT_{LINE_TIME_DURATION_MIN}min.parquet"
@@ -141,3 +141,4 @@ def clean_raw_data():
     gc.collect()
     logger.info(f"btc_price очищены и сохранены в {CLEARED_PRICES_NAME_FILE}.")
     
+

@@ -13,7 +13,6 @@ from pathlib import Path
 from datetime import datetime
 from sklearn.model_selection import ParameterGrid
 
-from modules.logger.logger import setup_logging
 from settings.paths import (
     BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE,
     NEW_MODELS_PATH,
@@ -24,7 +23,8 @@ from settings.paths import (
 from . import service_funcs as sf
 from . import data_operations as do
 
-logger = setup_logging(__name__)
+import logging
+logger = logging.getLogger("app")
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
 
@@ -242,3 +242,4 @@ def generate_values(param):
             return np.linspace(param["start"], param["stop"], int(param["num"])).tolist()    # # Используем np.linspace
     # Если параметр уже является списком или другого типа, возвращаем его как есть
     return param
+

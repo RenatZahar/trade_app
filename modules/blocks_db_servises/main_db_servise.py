@@ -1,7 +1,6 @@
 import asyncio
 import os
 
-from modules.logger.logger import setup_logging
 
 from db_servise_funcs import (
     init_db_mod,
@@ -11,7 +10,8 @@ from db_servise_funcs import (
 from settings.paths import BLOCKS_SQL_DATA
 # проверить чтобы все действия были реализованы через копирование на диск С. 
 
-logger = setup_logging(__name__)
+import logging
+logger = logging.getLogger("app")
 def setup_temp_directory(temp_dir='C:/sqlite_temp'):
     """
     Настройка временного каталога для SQLite.
@@ -47,3 +47,4 @@ if __name__ == "__main__":
 # и вызывать его функциональность из другого файла (например, из main.py). 
 # Для этого используется специальная конструкция 
 # if __name__ == "__main__":, которая позволяет контролировать, когда и как выполняется код.
+

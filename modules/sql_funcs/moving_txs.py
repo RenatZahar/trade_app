@@ -7,12 +7,12 @@ import sys
 from datetime import datetime
 from settings.paths import BLOCKS_SQL_DATA
 from settings.sql import SQL_LIMIT_BATCH_SIZE, TXS_PER_WALLET_MORE_THAN
-from modules.logger.logger import setup_logging
 
 # SQL_LIMIT_BATCH_SIZE подается в функции напрямую а BLOCKS_SQL_DATA - как аргумент фунцкии - как правильно делать? 
 # надо переделывать логику. слишком медленно.
 
-logger = setup_logging(__name__)
+import logging
+logger = logging.getLogger("app")
 
 def list_tables(db_path):
     conn = sqlite3.connect(db_path)
@@ -428,3 +428,4 @@ def moving_txs():
 
 if __name__ == "__main__":
     moving_txs()
+

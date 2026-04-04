@@ -1,10 +1,10 @@
 import time
 import requests
 import os
-from modules.logger.logger import setup_logging
 from settings.price_updater import BINANСE_API_URL
 
-logger = setup_logging(__name__)
+import logging
+logger = logging.getLogger("app")
 
 def get_price_data(start_time_ms, end_time_ms):
     logger.info(f"Старт price_updater")
@@ -47,3 +47,4 @@ def get_price_data(start_time_ms, end_time_ms):
     else:
         logger.error('Не получилось обновить данные btc с api binance')
         return None 
+

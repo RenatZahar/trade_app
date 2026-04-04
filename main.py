@@ -7,7 +7,8 @@ Operational notes and backlog for this file were moved to:
 import argparse
 import time
 from modules.logger.run_tracker import RunTracker
-from modules.logger.logger import setup_logging
+import logging
+import modules.logger.logger as app_logger_module
 
 EPILOG=(
     "Test modes:\n"
@@ -30,11 +31,15 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 if __name__ == "__main__":
-    logger = setup_logging(__name__)
-    logger.info("Старт main.py")
+
 
     args = parse_args()
-    tracker = RunTracker(args, logger)
+    tracker = RunTracker(args)
+    id_ = tracker.id
+    app_logger_module.setup_logging(id_)
+    logger = logging.getLogger("app")
+    logger.warning(f"Старт main.py, прогон № {id_}")
+    app_logger_module.log_tracker_run_event(tracker, "run_started")
 
     try:
         if args.start_parser:
@@ -47,6 +52,7 @@ if __name__ == "__main__":
 
             moving_txs()
             tracker.finish_run('success')
+            app_logger_module.log_tracker_run_event(tracker, "run_finished")
             raise SystemExit(0)
         
         if args.test == "flask":
@@ -54,6 +60,7 @@ if __name__ == "__main__":
 
             mf.start_flask()
             tracker.finish_run('success')
+            app_logger_module.log_tracker_run_event(tracker, "run_finished")
             raise SystemExit(0)
         
         elif args.test == "main_pipeline":
@@ -65,6 +72,7 @@ if __name__ == "__main__":
             update_peaks()
             mf.teach_and_update_models(TEACHING_TEST=1)
             tracker.finish_run('success')
+            app_logger_module.log_tracker_run_event(tracker, "run_finished")
             raise SystemExit(0)
         
         elif args.test == "param_grid":
@@ -72,6 +80,7 @@ if __name__ == "__main__":
 
             mf.test_param_grid(TEACHING_TEST=1)
             tracker.finish_run('success')
+            app_logger_module.log_tracker_run_event(tracker, "run_finished")
             raise SystemExit(0)
         
         elif args.test == "converge_elasticnet":
@@ -79,21 +88,28 @@ if __name__ == "__main__":
 
             converge_of_elasticnet()
             tracker.finish_run('success')
+            app_logger_module.log_tracker_run_event(tracker, "run_finished")
             raise SystemExit(0)
         
         elif args.test == "right_now_test":
             import time
             time.sleep(2)
             tracker.finish_run('success')
+            app_logger_module.log_tracker_run_event(tracker, "run_finished")
             raise SystemExit(0)
 
     except KeyboardInterrupt as e:
         tracker.finish_run('interrupted', e)
+        app_logger_module.log_tracker_run_event(tracker, "run_finished")
         raise
 
     except Exception as e:
         tracker.finish_run('error', e)
+        app_logger_module.log_tracker_run_event(tracker, "run_finished", level=logging.ERROR)
         raise
+    finally:
+        app_logger_module.stop_logging()
+
 
 
 

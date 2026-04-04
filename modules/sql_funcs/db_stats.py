@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from modules.logger.logger import setup_logging
 
-logger = setup_logging(__name__)
+import logging
+logger = logging.getLogger("app")
 
 def get_sqlite_stat1(db_path):
     try:
@@ -115,4 +115,5 @@ stat_data = get_sqlite_stat1(BLOCKS_SQL_DATA)
 logger.info(f"Содержимое sqlite_stat1: {stat_data}")
 
 display_table_info(BLOCKS_SQL_DATA, table_name)
+
 

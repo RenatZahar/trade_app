@@ -5,10 +5,10 @@ import os
 from dask.distributed import Client, LocalCluster
 from dask.config import set as dask_set
 from settings.dask import DASK_SETTINGS
-from modules.logger.logger import setup_logging
 from dask.distributed import wait
 
-logger = setup_logging(__name__)
+import logging
+logger = logging.getLogger("app")
 logging.getLogger("distributed.utils_perf").setLevel(logging.ERROR)
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
@@ -89,3 +89,4 @@ def close_dask_client(client):
         logger.info("Dask-клиент успешно закрыт.")
     except Exception as e:
         logger.error(f"Ошибка при закрытии клиента: {e}")
+

@@ -33,7 +33,7 @@ def get_arg(args):
     return starting_arg
         
 class RunTracker():
-    def __init__(self, args, logger):
+    def __init__(self, args):
         global CURRENT_RUN_TRACKER
         self.id = get_init_number()
         self.start_arg = get_arg(args)
@@ -49,7 +49,6 @@ class RunTracker():
         self.duration_human = None
         self.status = 'running'
         self.error = None
-        self.logger = logger
         self.current_stage = None
         self.current_stage_started_at = None
         self.current_stage_started_perf_counter = None
@@ -91,9 +90,11 @@ class RunTracker():
         self.current_stage = stage
         self.current_stage_started_at = stage_started_at_dt.strftime("%Y-%m-%d %H:%M:%S")
         self.current_stage_started_perf_counter = time.perf_counter()
-        self.logger.info(
-            f"stage_started | run_id={self.id} | stage={stage} | status=running | started_at={self.current_stage_started_at}"
-        )
+        return {
+            'stage': self.current_stage,
+            'started_at': self.current_stage_started_at,
+            'status': 'running',
+        }
 
     def finish_stage(self, status='success', details=None):
         if self.current_stage is None or self.current_stage_started_perf_counter is None:
@@ -109,12 +110,10 @@ class RunTracker():
             'details': details,
         }
         self.stages.append(stage_data)
-        self.logger.info(
-            f"stage_finished | run_id={self.id} | stage={self.current_stage} | status={status} | duration_sec={duration_sec} | duration_human={duration_human} | details={details}"
-        )
         self.current_stage = None
         self.current_stage_started_at = None
         self.current_stage_started_perf_counter = None
+        return stage_data
 
         
     def finish_run(self, status, e = None):
@@ -125,6 +124,7 @@ class RunTracker():
         self.finished_at = finished_at_dt.strftime("%Y-%m-%d %H:%M:%S")
 
         self.duration_sec, self.duration_human = self.get_duration_data(self.started_perf_counter)
+        return self.get_run_data()
 
 
 def get_current_run_tracker():
