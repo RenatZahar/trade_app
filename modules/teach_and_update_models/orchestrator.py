@@ -7,6 +7,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import random
 
 from modules.logger.logger import setup_logging
+from modules.logger.run_tracker import get_current_run_tracker
 import main_functions as mf
 from settings.paths import NEW_PARAM_GRID_DIR, PARAM_GRID_DIR, PARAM_GRID_RESULTS
 from . import service_funcs as sf
@@ -20,6 +21,7 @@ module_name_for_temp_dir = __name__.replace('.', '_')
 os.chdir(script_dir)
 
 def main_processing_model_orchestra(model, TEST):
+    tracker = get_current_run_tracker()
     # mf.clear_temp_directory_of_module(module_name_for_temp_dir)
 
     # ДОБАВИТЬ В ПАРАМЕТРЫ МОДЕЛИ ПАРАМЕТРЫ ЗАТУХАНИЯ ДЛЯ ТЕСТА В ПАРАМ ГРИД. ПЕРЕДЕЛАТЬ ФУНКЦИЮ ТЕСТИРОВАНИЯ ПАРАМ ГРИДА ПОД РАЗНЫЕ
@@ -39,27 +41,52 @@ def main_processing_model_orchestra(model, TEST):
     filter_params = model.filter_params
     correlation_type = model.correlation_params.get('correlation_type', None).lower()
     for iteration, tmps in model.tmsps_data.items():
-        logger.info(f'\033[34mStart main teaching iteration {iteration} of {len(model.tmsps_data)}\033[0m')
-        logger.info(f'Models Time data: {tmps}')
+        try:
+            logger.info(f'\033[34mStart main teaching iteration {iteration} of {len(model.tmsps_data)}\033[0m')
+            logger.info(f'Models Time data: {tmps}')
 
-        cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test  = do.get_corelation_by_tmsp_df(TEST, filter_params, correlation_type, tmps, chunk_size)
-        cor_data_in_iteration_to_teach = do.clean_data(cor_data_in_iteration_to_teach)
-    
-        if cor_data_in_iteration_to_profit_test.empty:
-            logger.info("Empty profit test data. Stop teaching.")
-            continue
-        cor_data_in_iteration_to_profit_test = do.clean_data(cor_data_in_iteration_to_profit_test)
+            if tracker:
+                tracker.start_stage('features.correlation_data')
+            cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test  = do.get_corelation_by_tmsp_df(TEST, filter_params, correlation_type, tmps, chunk_size)
+            cor_data_in_iteration_to_teach = do.clean_data(cor_data_in_iteration_to_teach)
+        
+            if cor_data_in_iteration_to_profit_test.empty:
+                if tracker:
+                    tracker.finish_stage('success', details=f'iteration={iteration} profit_test_data_empty')
+                logger.info("Empty profit test data. Stop teaching.")
+                continue
+            cor_data_in_iteration_to_profit_test = do.clean_data(cor_data_in_iteration_to_profit_test)
+            if tracker:
+                tracker.finish_stage('success', details=f'iteration={iteration}')
 
-        # cor_data_in_iteration_to_teach.to_parquet('cor_data_in_iteration_to_teach.parquet')
-        # cor_data_in_iteration_to_profit_test.to_parquet('cor_data_in_iteration_to_profit_test.parquet')
+            # cor_data_in_iteration_to_teach.to_parquet('cor_data_in_iteration_to_teach.parquet')
+            # cor_data_in_iteration_to_profit_test.to_parquet('cor_data_in_iteration_to_profit_test.parquet')
 
-        model.train_model_specific(cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test)
-        profit = model.calculate_total_value(cor_data_in_iteration_to_profit_test)
-        logger.info(f'\033[34mResult of profit test of {iteration} iteration: {profit}\033[0m')
-        model.save_model(iteration)
+            if tracker:
+                tracker.start_stage('train.model_fit')
+            model.train_model_specific(cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test)
+            if tracker:
+                tracker.finish_stage('success', details=f'iteration={iteration}')
 
-        # mf.clear_temp_directory()
-        gc.collect()
+            if tracker:
+                tracker.start_stage('evaluate.profit_test')
+            profit = model.calculate_total_value(cor_data_in_iteration_to_profit_test)
+            if tracker:
+                tracker.finish_stage('success', details=f'iteration={iteration} profit={profit}')
+            logger.info(f'\033[34mResult of profit test of {iteration} iteration: {profit}\033[0m')
+
+            if tracker:
+                tracker.start_stage('artifact.model_save')
+            model.save_model(iteration)
+            if tracker:
+                tracker.finish_stage('success', details=f'iteration={iteration}')
+
+            # mf.clear_temp_directory()
+            gc.collect()
+        except Exception as e:
+            if tracker:
+                tracker.finish_stage('error', details=f'iteration={iteration} error={e}')
+            raise
     
     # sf.move_init_data(model)
 

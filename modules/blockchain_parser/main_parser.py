@@ -11,6 +11,7 @@ from modules.redis_init.redis_init import send_message
 from . import async_parser_functions as apf
 # import tests
 from modules.logger.logger import setup_logging
+from modules.logger.run_tracker import get_current_run_tracker
 from settings.runtime import rpc_user, rpc_password, rpc_host, rpc_port
 from settings.paths import BLOCKS_SQL_DATA, CLEARED_PRICES_DIR # type: ignore #переменные подгружаются корректно, проблема в папках
 from settings.parser import QUANTITY_OF_BLOCKS_IN_ITERATION, MAX_ITERATIONS, START_BLOCK, PROBLEM_BLOCKS_LIST
@@ -39,14 +40,20 @@ pd.set_option('display.expand_frame_repr', False)
 
 
 async def parser():
+    tracker = get_current_run_tracker()
     try:
         logger.info("Запуск парсера блокчейна")
         send_message('parser_status', 'working')
+
+        if tracker:
+            tracker.start_stage('parser.prepare_download_list')
         await apf.set_wal_mode(BLOCKS_SQL_DATA)
         last_block = await apf.async_get_existing_last_block(BLOCKS_SQL_DATA, START_BLOCK)
         rpc_connection_main = apf.get_rpc_connection()
         all_blocks_to_download = apf.get_list_of_blocks_to_download(last_block, rpc_connection_main)
         blocks_to_parsing_generator = apf.split_list_into_chunks(all_blocks_to_download, QUANTITY_OF_BLOCKS_IN_ITERATION, MAX_ITERATIONS, PROBLEM_BLOCKS_LIST)
+        if tracker:
+            tracker.finish_stage('success', details=f'blocks_to_download={len(all_blocks_to_download)}')
         
 
 
@@ -57,6 +64,8 @@ async def parser():
                 send_message('parser_status', 'completed')
                 return
             
+            if tracker:
+                tracker.start_stage('parser.process_blocks_group')
             start_time = time.time()
             data = await apf.parsing_data(blocks_group)
             if not data.empty:
@@ -68,9 +77,18 @@ async def parser():
 
                 if tasks:
                     await asyncio.gather(*tasks)
+                if tracker:
+                    tracker.finish_stage(
+                        'success',
+                        details=f'blocks={len(blocks_group)} range={min_block_height}-{max_block_height}',
+                    )
+            elif tracker:
+                tracker.finish_stage('success', details=f'blocks={len(blocks_group)} data_is_empty')
 
         logger.info("Закончились блоки для скачки, ожидаем перезапуск")
         send_message('parser_status', 'completed')
     except Exception as e:
-        logger.error("Произошла ошибка: {e}")
+        if tracker:
+            tracker.finish_stage('error', details=str(e))
+        logger.error(f"Произошла ошибка: {e}")
 
