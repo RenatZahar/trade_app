@@ -28,27 +28,50 @@ os.chdir(script_dir)
 
 def converge_of_elasticnet(tmps=None, correlation_type=None):
     logger.info("\033[34mStart converge_of_elasticnet\033[0m")
-    dask_client = get_dask_client()
+    dask_client = None
     # check_for_temp_data_available() дописать функцию по копированию дата? скорее всего не понадобится
 
     all_txs_of_wallets_ddf_dir = os.path.join(dir_for_temp_files_of_module, 'txs_of_chunk_with_intervals')
     all_wallets_corelation_ddf_dir = os.path.join(dir_for_temp_files_of_module, 'correlation_wallets_df')
-    all_txs_of_wallets_ddf = dd.read_parquet(all_txs_of_wallets_ddf_dir)
-    all_wallets_corelation_ddf = dd.read_parquet(all_wallets_corelation_ddf_dir)
+    if not os.path.exists(all_txs_of_wallets_ddf_dir):
+        raise FileNotFoundError(f"Не найдена директория с транзакциями для converge test: {all_txs_of_wallets_ddf_dir}")
+    if not os.path.exists(all_wallets_corelation_ddf_dir):
+        raise FileNotFoundError(f"Не найдена директория с корреляциями для converge test: {all_wallets_corelation_ddf_dir}")
 
     if not correlation_type:
         correlation_type = 'basic'
     if not tmps: 
         tmps = {'model_relevance_start_tmsp': 1733311411, 'model_relevance_end_tmsp': 1738495411, 'profit_test_start_tmsp': 1728127410, 'profit_test_end_tmsp': 1733311410, 'teaching_start_tmsp': 1697023409, 'teaching_end_tmsp': 1728127409, 'cmlt_start_tmsp': 1695813808, 'cmlt_end_tmsp': 1697023408}
-    
-    cor_data_in_iteration_to_teach_df, cor_data_in_iteration_to_profit_test_df = get_data_for_teach_with_dask(tmps, all_txs_of_wallets_ddf, all_wallets_corelation_ddf, correlation_type, converge_test = 1, dir_for_save_test_data = dir_for_temp_files_of_module)
-    
-    logger.info("Closing dask client")
-    close_dask_client(dask_client)
-    cor_data_in_iteration_to_teach_df.reset_index(inplace=True)
-    cor_data_in_iteration_to_profit_test_df.reset_index(inplace=True)
-    cor_data_in_iteration_to_teach_df = clean_data(cor_data_in_iteration_to_teach_df)
-    cor_data_in_iteration_to_profit_test_df = clean_data(cor_data_in_iteration_to_profit_test_df)
+
+    try:
+        dask_client = get_dask_client()
+        all_txs_of_wallets_ddf = dd.read_parquet(all_txs_of_wallets_ddf_dir)
+        all_wallets_corelation_ddf = dd.read_parquet(all_wallets_corelation_ddf_dir)
+
+        cor_data_in_iteration_to_teach_df, cor_data_in_iteration_to_profit_test_df = get_data_for_teach_with_dask(
+            tmps,
+            all_txs_of_wallets_ddf,
+            all_wallets_corelation_ddf,
+            correlation_type,
+            converge_test=1,
+            dir_for_save_test_data=dir_for_temp_files_of_module,
+        )
+
+        cor_data_in_iteration_to_teach_df.reset_index(inplace=True)
+        cor_data_in_iteration_to_profit_test_df.reset_index(inplace=True)
+        cor_data_in_iteration_to_teach_df = clean_data(cor_data_in_iteration_to_teach_df)
+        cor_data_in_iteration_to_profit_test_df = clean_data(cor_data_in_iteration_to_profit_test_df)
+
+        if cor_data_in_iteration_to_teach_df.empty:
+            raise RuntimeError("Converge test produced empty teaching dataframe.")
+        if cor_data_in_iteration_to_profit_test_df.empty:
+            raise RuntimeError("Converge test produced empty profit-test dataframe.")
+
+        logger.info("Converge ElasticNet test data prepared successfully.")
+    finally:
+        if dask_client:
+            logger.info("Closing dask client")
+            close_dask_client(dask_client)
 
 
 if __name__ == '__main__':

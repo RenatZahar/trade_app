@@ -17,6 +17,7 @@ CLEARED_PRICES_DIR_FILE = CLEARED_PRICES_DIR / f"smoothed_BTCUSDT_{line_time_dur
 
 def update_peaks():
     logger.warning('сделать раз в день перезапуск get_peaks')
+    should_rebuild_peaks = True
     yesterday_midnight = pnt.get_yesterday_midnight()
     if os.path.exists(BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE):
         btc_price_data_with_peaks = pd.read_parquet(BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE)
@@ -24,10 +25,13 @@ def update_peaks():
     
         if yesterday_midnight < int(last_date_of_peaks):
             logger.info('get_peaks обновлял данные сегодня, пропускаем расчеты')
+            should_rebuild_peaks = False
             return
-    
-    else:
+
+    if should_rebuild_peaks:
         btc_price_df = pnt.get_btc_prices(CLEARED_PRICES_DIR_FILE)
+        if btc_price_df.empty:
+            raise RuntimeError("Не удалось обновить пики: входной dataframe цен пуст.")
         btc_price_df["Buy"], btc_price_df["Sell"] = 0, 0
         btc_price_data_with_peaks = pnt.analyze_with_parameters(btc_price_df, cicle, price_diff_pct, plato, line_time_duration_min)
         logger.info('Пики в get_peaks найдены, крайие строки:')

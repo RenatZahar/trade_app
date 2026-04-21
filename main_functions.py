@@ -80,14 +80,6 @@ def check_parser_status(message):
         else:
             time.sleep(30)
 
-def start_blockchain_parser():
-    global parser_running
-    with parser_lock:
-        parser_running = True
-    parser_thread = threading.Thread(target=run_parser_asyncio)
-    parser_thread.start()
-    return parser_thread
-
 def run_parser_now_and_wait():
     logger.info("Старт тестового запуска парсера")
     if not start_redis():
@@ -95,6 +87,13 @@ def run_parser_now_and_wait():
     parser_thread = start_blockchain_parser()
     parser_thread.join()
 
+def start_blockchain_parser():
+    global parser_running
+    with parser_lock:
+        parser_running = True
+    parser_thread = threading.Thread(target=run_parser_asyncio)
+    parser_thread.start()
+    return parser_thread
 
 def run_parser_asyncio():
     global parser_running
@@ -125,7 +124,7 @@ def clear_all_temp_directory():
         # МБ ПЕРЕНЕСТИ В ОТДЕЛЬНОЕ МЕСТО СОЗДАНИЕ ДИРЕКТОРИЙ? (ВРЕМЕННЫХ ТА И ПРОЧИХ)
         os.makedirs(APP_TEMP_DIR, exist_ok=True)
         return
-        
+         
     for filename in os.listdir(APP_TEMP_DIR):
         file_path = os.path.join(APP_TEMP_DIR, filename)
         try:
@@ -141,14 +140,26 @@ def clear_all_temp_directory():
 def start_flask():
     """Запускает Flask-приложение в отдельном потоке"""
     from modules.flask_module.fl_app import app as flask_app
+    startup_error = {}
 
     def run_flask():
-        flask_app.run(debug=False, host='127.0.0.1', port=5000, use_reloader=False)
+        try:
+            flask_app.run(debug=False, host='127.0.0.1', port=5000, use_reloader=False)
+        except Exception as e:
+            startup_error['exception'] = e
+            logger.error(f"Ошибка при запуске Flask: {e}")
+            raise
     
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.daemon = True  # Поток завершится вместе с основной программой
     flask_thread.start()
+    time.sleep(1)
+    if 'exception' in startup_error:
+        raise RuntimeError("Flask startup failed.") from startup_error['exception']
+    if not flask_thread.is_alive():
+        raise RuntimeError("Flask thread stopped during startup.")
     logger.info("Flask запущен на http://127.0.0.1:5000")
+    return flask_thread
 
 
 def resave_json_with_indend():

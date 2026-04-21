@@ -46,17 +46,17 @@ async def parser():
         logger.info("Запуск парсера блокчейна")
         send_message('parser_status', 'working')
 
-        if tracker:
-            stage_data = tracker.start_stage('parser.prepare_download_list')
-            app_logger_module.log_tracker_stage_started(tracker, stage_data)
+        stage_data = tracker.start_stage('parser.prepare_download_list')
+        app_logger_module.log_tracker_stage_started(tracker, stage_data)
+
         await apf.set_wal_mode(BLOCKS_SQL_DATA)
         last_block = await apf.async_get_existing_last_block(BLOCKS_SQL_DATA, START_BLOCK)
         rpc_connection_main = apf.get_rpc_connection()
         all_blocks_to_download = apf.get_list_of_blocks_to_download(last_block, rpc_connection_main)
         blocks_to_parsing_generator = apf.split_list_into_chunks(all_blocks_to_download, QUANTITY_OF_BLOCKS_IN_ITERATION, MAX_ITERATIONS, PROBLEM_BLOCKS_LIST)
-        if tracker:
-            stage_data = tracker.finish_stage('success', details=f'blocks_to_download={len(all_blocks_to_download)}')
-            app_logger_module.log_tracker_stage_finished(tracker, stage_data)
+
+        stage_data = tracker.finish_stage('success', details=f'blocks_to_download={len(all_blocks_to_download)}')
+        app_logger_module.log_tracker_stage_finished(tracker, stage_data)
         
 
 
@@ -67,9 +67,9 @@ async def parser():
                 send_message('parser_status', 'completed')
                 return
             
-            if tracker:
-                stage_data = tracker.start_stage('parser.process_blocks_group')
-                app_logger_module.log_tracker_stage_started(tracker, stage_data)
+            stage_data = tracker.start_stage('parser.process_blocks_group')
+            app_logger_module.log_tracker_stage_started(tracker, stage_data)
+            
             start_time = time.time()
             data = await apf.parsing_data(blocks_group)
             if not data.empty:
@@ -81,22 +81,22 @@ async def parser():
 
                 if tasks:
                     await asyncio.gather(*tasks)
-                if tracker:
-                    stage_data = tracker.finish_stage(
-                        'success',
-                        details=f'blocks={len(blocks_group)} range={min_block_height}-{max_block_height}',
-                    )
-                    app_logger_module.log_tracker_stage_finished(tracker, stage_data)
-            elif tracker:
-                stage_data = tracker.finish_stage('success', details=f'blocks={len(blocks_group)} data_is_empty')
+
+                stage_data = tracker.finish_stage(
+                    'success',
+                    details=f'blocks={len(blocks_group)} range={min_block_height}-{max_block_height}',
+                )
                 app_logger_module.log_tracker_stage_finished(tracker, stage_data)
+
+
+            stage_data = tracker.finish_stage('success', details=f'blocks={len(blocks_group)} data_is_empty')
+            app_logger_module.log_tracker_stage_finished(tracker, stage_data)
 
         logger.info("Закончились блоки для скачки, ожидаем перезапуск")
         send_message('parser_status', 'completed')
     except Exception as e:
-        if tracker:
-            stage_data = tracker.finish_stage('error', details=str(e))
-            app_logger_module.log_tracker_stage_finished(tracker, stage_data)
+        stage_data = tracker.finish_stage('error', details=str(e))
+        app_logger_module.log_tracker_stage_finished(tracker, stage_data)
         logger.error(f"Произошла ошибка: {e}")
         raise
 
