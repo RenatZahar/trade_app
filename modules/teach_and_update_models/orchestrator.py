@@ -104,10 +104,14 @@ def main_processing_model_orchestra(model, TEST):
 def teaching_with_param_grid_orchestrator(TEACHING_TEST):
     time_grid_params, grid_params = sf.check_for_new_param_grid()
     models_statistic_result_df = pd.DataFrame()
+    if not grid_params:
+        raise RuntimeError("Param grid orchestration started without parameter combinations.")
 
     chunk_size = 200
 
     tmsps_data = sf.get_tmsps_data_of_model(time_grid_params)
+    if not tmsps_data or 1 not in tmsps_data:
+        raise RuntimeError("Не удалось подготовить временные интервалы для param grid.")
     tmps = tmsps_data[1]
     logger.info(str(tmps))
 
@@ -132,6 +136,9 @@ def teaching_with_param_grid_orchestrator(TEACHING_TEST):
                 grids_grouped_by_corr_type[i] = random.sample(group, int(len(group)*TEACHING_TEST))
 
     for group_of_grid in grids_grouped_by_corr_type:
+        if not group_of_grid:
+            logger.info("Пропускаем пустую группу param grid.")
+            continue
         
         correlation_type = group_of_grid[0]['model']['correlation_params'].get('correlation_type', None).lower()
         
@@ -159,9 +166,16 @@ def teaching_with_param_grid_orchestrator(TEACHING_TEST):
                     cor_data_in_iteration_to_profit_test
                 ))
             for future in as_completed(futures):
-                result = future.result()
+                try:
+                    result = future.result()
+                except Exception as e:
+                    logger.error(f"Ошибка в worker param grid: {e}")
+                    raise
                 row_df = pd.DataFrame([result])
                 models_statistic_result_df = pd.concat([models_statistic_result_df, row_df], ignore_index=True)
+
+    if models_statistic_result_df.empty:
+        raise RuntimeError("Param grid завершился без результатов моделей.")
 
     now = datetime.now()
     now = now.strftime("%d-%m-%Y_%H-%M-%S")
@@ -228,7 +242,8 @@ def teach_model(model_type_data, model_type, model_info, model_dir_file, TEACHIN
         teach_model_from_json(model_type, model_info, model_dir_file, TEACHING_TEST)
     elif 'pkl' in model_type_data:
         logger.info("Найден новый pkl модели") 
-        logger.warning('Код для использования модели PKL еще не написан. Надо сохранять параметры в папку teached models если буду использовать pkl')
+        logger.error('Код для использования модели PKL еще не написан. Надо сохранять параметры в папку teached models если буду использовать pkl')
+        raise NotImplementedError("PKL model teaching flow is not implemented yet.")
 
 def teach_model_from_json(model_type, model_info, init_dir_file, TEACHING_TEST):
     if model_type == 'ElasticNet':

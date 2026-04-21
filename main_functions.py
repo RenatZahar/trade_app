@@ -15,6 +15,8 @@ from settings.paths import APP_TEMP_DIR, NEW_MODELS_PATH
 from modules.btc_core_init.btc_core_manager import get_btc_status, blocks_to_download
 from modules.blockchain_parser.main_parser  import parser
 from modules.redis_init.redis_init import get_redis_status, start_redis_client
+from modules.logger.run_tracker import get_current_run_tracker 
+from modules.logger import logger as app_logger_module 
 
 logger = logging.getLogger('app')
 
@@ -78,19 +80,31 @@ def check_parser_status(message):
         else:
             time.sleep(30)
 
+def run_parser_now_and_wait():
+    logger.info("Старт тестового запуска парсера")
+    if not start_redis():
+        raise RuntimeError("Redis client initialization failed before parser test startup.")
+    parser_thread = start_blockchain_parser()
+    parser_thread.join()
+
 def start_blockchain_parser():
     global parser_running
     with parser_lock:
         parser_running = True
-    threading.Thread(target=run_parser_asyncio).start()
-
+    parser_thread = threading.Thread(target=run_parser_asyncio)
+    parser_thread.start()
+    return parser_thread
 
 def run_parser_asyncio():
     global parser_running
+    tracker = get_current_run_tracker()
     try:
         asyncio.run(parser())
     except Exception as e:
         logger.error(f"Ошибка в парсере блокчейна: {e}")
+        tracker.finish_run('error', e)
+        app_logger_module.log_tracker_run_event(tracker, "run_finished", level=logging.ERROR)
+        send_message('parser_status', 'completed with error')
     finally:
         with parser_lock:
             parser_running = False
@@ -110,7 +124,7 @@ def clear_all_temp_directory():
         # МБ ПЕРЕНЕСТИ В ОТДЕЛЬНОЕ МЕСТО СОЗДАНИЕ ДИРЕКТОРИЙ? (ВРЕМЕННЫХ ТА И ПРОЧИХ)
         os.makedirs(APP_TEMP_DIR, exist_ok=True)
         return
-        
+         
     for filename in os.listdir(APP_TEMP_DIR):
         file_path = os.path.join(APP_TEMP_DIR, filename)
         try:
@@ -126,14 +140,26 @@ def clear_all_temp_directory():
 def start_flask():
     """Запускает Flask-приложение в отдельном потоке"""
     from modules.flask_module.fl_app import app as flask_app
+    startup_error = {}
 
     def run_flask():
-        flask_app.run(debug=False, host='127.0.0.1', port=5000, use_reloader=False)
+        try:
+            flask_app.run(debug=False, host='127.0.0.1', port=5000, use_reloader=False)
+        except Exception as e:
+            startup_error['exception'] = e
+            logger.error(f"Ошибка при запуске Flask: {e}")
+            raise
     
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.daemon = True  # Поток завершится вместе с основной программой
     flask_thread.start()
+    time.sleep(1)
+    if 'exception' in startup_error:
+        raise RuntimeError("Flask startup failed.") from startup_error['exception']
+    if not flask_thread.is_alive():
+        raise RuntimeError("Flask thread stopped during startup.")
     logger.info("Flask запущен на http://127.0.0.1:5000")
+    return flask_thread
 
 
 def resave_json_with_indend():

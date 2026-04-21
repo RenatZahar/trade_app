@@ -17,12 +17,6 @@ EPILOG=(
     "  param_grid    - запуск подбора параметров\n"
     )
 
-
-
-def run_parser():
-    import main_functions as mf
-    mf.start_btc_core_monitor_and_parser()
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Unified entrypoint for trade_app", epilog=EPILOG, formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("-p", "--start_parser", action="store_true", help="Старт парсера блокчейна")
@@ -31,7 +25,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 if __name__ == "__main__":
-
 
     args = parse_args()
     tracker = RunTracker(args)
@@ -43,7 +36,8 @@ if __name__ == "__main__":
 
     try:
         if args.start_parser:
-            run_parser()
+            import main_functions as mf
+            mf.start_btc_core_monitor_and_parser()
             while True:
                 time.sleep(1)
         
@@ -92,10 +86,11 @@ if __name__ == "__main__":
             raise SystemExit(0)
         
         elif args.test == "right_now_test":
-            import time
-            time.sleep(2)
-            tracker.finish_run('success')
-            app_logger_module.log_tracker_run_event(tracker, "run_finished")
+            import main_functions as mf
+            mf.run_parser_now_and_wait()
+            if tracker.status == 'running':
+                tracker.finish_run('success')
+                app_logger_module.log_tracker_run_event(tracker, "run_finished")
             raise SystemExit(0)
 
     except KeyboardInterrupt as e:

@@ -32,7 +32,13 @@ def get_model_type(model_info):
     return model_info['model']['type']
 
 def check_for_new_models():
+    if not NEW_MODELS_PATH.exists():
+        raise FileNotFoundError(f"Директория с новыми моделями не найдена: {NEW_MODELS_PATH}")
+
     files = [f for f in NEW_MODELS_PATH.iterdir() if f.is_file()]
+    if not files:
+        raise FileNotFoundError(f"В директории {NEW_MODELS_PATH} нет файлов моделей для обучения.")
+
     for file in files:
         if 'example' in file.name:
             continue
@@ -45,6 +51,8 @@ def check_for_new_models():
             return 'json', model_type, model_info, full_dir_file
         if file.suffix == '.pkl':
             return 'pkl', None, None, None
+
+    raise RuntimeError(f"В директории {NEW_MODELS_PATH} не найден поддерживаемый файл модели.")
 
 def get_peaks_df():
     df = pd.read_parquet(BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE)
@@ -154,24 +162,23 @@ def get_tmsps_data_of_model(time_params):
 
 def check_for_new_param_grid():
     param_grid_path = Path(NEW_PARAM_GRID_DIR)
-    param_list = []
-    if param_grid_path.exists():
-        files_list = os.listdir(param_grid_path)
-        # print(files_list)
-        for file in files_list:
-            if 'example' in file:
-                continue
-            path = Path(param_grid_path, file)
-            # print(path)
-            with open(path, 'r', encoding='utf-8') as file:
-                json_param_grid = json.load(file)
+    if not param_grid_path.exists():
+        raise FileNotFoundError(f"Директория param grid не найдена: {param_grid_path}")
 
-            time_params = json_param_grid["model"]['time_params']
-            grid_params = generate_hierarchical_grid(json_param_grid)
+    files_list = [file for file in os.listdir(param_grid_path) if 'example' not in file]
+    if not files_list:
+        raise FileNotFoundError(f"В директории {param_grid_path} нет файлов param grid для запуска.")
 
-    # # for item in grid[:3]:
-    # #     print(item)
-    # print(time_params)
+    selected_file = files_list[0]
+    path = Path(param_grid_path, selected_file)
+    with open(path, 'r', encoding='utf-8') as file:
+        json_param_grid = json.load(file)
+
+    time_params = json_param_grid["model"]['time_params']
+    grid_params = generate_hierarchical_grid(json_param_grid)
+    if not grid_params:
+        raise RuntimeError(f"Param grid из файла {path} не содержит ни одной комбинации параметров.")
+
     return time_params, grid_params
 
 def generate_hierarchical_grid(json_param_grid):

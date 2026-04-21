@@ -29,14 +29,14 @@ def check_db(db_path):
     try:
         # 1) проверяем структуру таблиц
         if not check_table_structures(conn, 'few_tx_wallets', 'data_table'):
-            raise Exception("Структуры таблиц не совпадают!")
+            raise RuntimeError("Структуры таблиц не совпадают!")
 
         # 2) удаляем полные дубликаты строк из data_table
         #    — оставляем только одну строку для каждой комбинации значений во всех столбцах
         cursor.execute("PRAGMA table_info(data_table);")
         cols = [r[1] for r in cursor.fetchall()]
         if not cols:
-            raise Exception("data_table не содержит столбцов")
+            raise RuntimeError("data_table не содержит столбцов")
 
         #комментарий: строим GROUP BY по всем колонкам (кавычки на случай спец.символов)
         group_by = ", ".join(['"{}"'.format(c) for c in cols])
@@ -52,6 +52,10 @@ def check_db(db_path):
 
         cursor.execute(sql)
         conn.commit()
+    except Exception as e:
+        logger.error(f"Ошибка при проверке и очистке БД: {e}")
+        conn.rollback()
+        raise
 
     finally:
         cursor.close()
@@ -122,7 +126,7 @@ def return_few_tx_wallets_to_data_table(db_path,
         # Предполагаем, что первый столбец — первичный ключ, по нему будем удалять
         pk = 'Transaction_id'
         if pk not in cols:
-            raise Exception(f"Ключ {pk} отсутствует в таблице {source_table}")
+            raise RuntimeError(f"Ключ {pk} отсутствует в таблице {source_table}")
         pk_idx = cols.index(pk)
 
         while True:
@@ -154,6 +158,7 @@ def return_few_tx_wallets_to_data_table(db_path,
     except Exception as e:
         logger.error("Ошибка при возврате данных: {}".format(e))
         conn.rollback()
+        raise
     finally:
         cursor.close()
         conn.close()
@@ -178,7 +183,8 @@ def create_target_table(db_path, target_table='few_tx_wallets', source_table='da
     1. Создает новую таблицу (например, few_tx_wallets) с такой же схемой, как у исходной таблицы (data_table).
     """
     logger.info('start create_target_table')
-
+    conn = None
+    cursor = None
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -193,9 +199,14 @@ def create_target_table(db_path, target_table='few_tx_wallets', source_table='da
     except Exception as e:
         logger.error(f"Ошибка при создании таблицы {target_table}: {e}")
         traceback.print_exc()
+        if conn:
+            conn.rollback()
+        raise
     finally:
-        cursor.close()
-        conn.close()
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 def create_temp_wallets_table(db_path, txs_count, source_table='data_table', temp_table='temp_wallets'):
@@ -204,6 +215,8 @@ def create_temp_wallets_table(db_path, txs_count, source_table='data_table', tem
        Если таблица уже существует, создание и заполнение пропускается.
     """
     logger.info('start create_temp_wallets_table')
+    conn = None
+    cursor = None
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -238,9 +251,14 @@ def create_temp_wallets_table(db_path, txs_count, source_table='data_table', tem
     except Exception as e:
         logger.error(f"Ошибка при создании или заполнении таблицы {temp_table}: {e}")
         traceback.print_exc()
+        if conn:
+            conn.rollback()
+        raise
     finally:
-        cursor.close()
-        conn.close()
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 def optimize_db(db_path):
@@ -248,7 +266,8 @@ def optimize_db(db_path):
     Включает режим WAL и устанавливает оптимальные параметры для ускорения операций записи.
     """
     logger.info('start optimize_db')
-
+    conn = None
+    cursor = None
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -257,12 +276,14 @@ def optimize_db(db_path):
         # #comment: устанавливаем нормальную синхронизацию для ускорения записи
         cursor.execute("PRAGMA synchronous=NORMAL;")
         conn.commit()
-        cursor.close()
-        conn.close()
         logger.info("База данных оптимизирована: включен режим WAL, synchronous=NORMAL.")
     except Exception as e:
-        logger.error(f"Ошибка при оптимизации БД: {e}")
-        traceback.print_exc()
+        logger.warning(f"Не удалось оптимизировать БД: {e}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 def process_wallets(db_path, source_table='data_table', target_table='few_tx_wallets', 
                     temp_table='temp_wallets', batch_size=SQL_LIMIT_BATCH_SIZE):
@@ -272,6 +293,8 @@ def process_wallets(db_path, source_table='data_table', target_table='few_tx_wal
     - Для каждого батча вызывает process_wallets_batch.
     - Если temp_wallets пуста, таблица удаляется.
     """
+    conn = None
+    cursor = None
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -302,11 +325,15 @@ def process_wallets(db_path, source_table='data_table', target_table='few_tx_wal
             sys.stdout.write(f'\rProcessed: {processed}/{total}, ETA: {eta:.2f} min')
             sys.stdout.flush()
 
-        cursor.close()
-        conn.close()
     except Exception as e:
         logger.error(f"Ошибка при обработке кошельков: {e}")
         traceback.print_exc()
+        raise
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 def process_wallets_batch(db_path, source_table='data_table', target_table='few_tx_wallets', 
                           temp_table='temp_wallets', wallet_ids=None):
@@ -320,6 +347,8 @@ def process_wallets_batch(db_path, source_table='data_table', target_table='few_
 
     if not wallet_ids:
         return
+    conn = None
+    cursor = None
     try:
         start_time = time.time()
         conn = sqlite3.connect(db_path)
@@ -356,40 +385,55 @@ def process_wallets_batch(db_path, source_table='data_table', target_table='few_
         conn.commit()  # #comment: фиксируем транзакцию для всей группы кошельков
         # print(f"Обработана порция из {len(wallet_ids)} кошельков.")
     except Exception as e:
-        conn.rollback()
+        if conn:
+            conn.rollback()
         logger.error(f"Ошибка при обработке порции кошельков {wallet_ids}: {e}")
         traceback.print_exc()
+        raise
     finally:
-        cursor.close()
-        conn.close()
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 def print_now():
     logger.info(f'Старт в {datetime.now()}')
 
 def create_indexes(db_path):
     # создаём индекс по Wallet_id и Transaction_id во всех таблицах, где есть соответствующие столбцы
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    # получаем список всех таблиц
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-    tables = [row[0] for row in cursor.fetchall()]
-    for table in tables:
-        # узнаём, какие столбцы есть в таблице
-        cursor.execute(f"PRAGMA table_info({table});")
-        cols = [col[1] for col in cursor.fetchall()]
-        # если есть Wallet_id — создаём индекс
-        if 'Wallet_id' in cols:
-            cursor.execute(
-                f"CREATE INDEX IF NOT EXISTS idx_{table}_wallet_id ON {table}(Wallet_id);"
-            )
-        # если есть Transaction_id — создаём индекс
-        if 'Transaction_id' in cols:
-            cursor.execute(
-                f"CREATE INDEX IF NOT EXISTS idx_{table}_transaction_id ON {table}(Transaction_id);"
-            )
-    conn.commit()
-    cursor.close()
-    conn.close()
+    conn = None
+    cursor = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        # получаем список всех таблиц
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = [row[0] for row in cursor.fetchall()]
+        for table in tables:
+            # узнаём, какие столбцы есть в таблице
+            cursor.execute(f"PRAGMA table_info({table});")
+            cols = [col[1] for col in cursor.fetchall()]
+            # если есть Wallet_id — создаём индекс
+            if 'Wallet_id' in cols:
+                cursor.execute(
+                    f"CREATE INDEX IF NOT EXISTS idx_{table}_wallet_id ON {table}(Wallet_id);"
+                )
+            # если есть Transaction_id — создаём индекс
+            if 'Transaction_id' in cols:
+                cursor.execute(
+                    f"CREATE INDEX IF NOT EXISTS idx_{table}_transaction_id ON {table}(Transaction_id);"
+                )
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Ошибка при создании индексов: {e}")
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 def moving_txs():
     print_now()

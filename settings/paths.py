@@ -1,6 +1,7 @@
 # общиие пути для модулей/проекта
 
 from pathlib import Path
+from settings.runtime import BLOCKS_SQL_DATA as RUNTIME_BLOCKS_SQL_DATA
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -22,7 +23,7 @@ PARAM_GRID_DIR = BASE_DIR / 'data/param_grids'
 NEW_PARAM_GRID_DIR = PARAM_GRID_DIR / 'new_grids'
 PARAM_GRID_RESULTS = PARAM_GRID_DIR / 'param_grid_results'
 
-BLOCKS_SQL_DATA = BASE_DIR / 'data/blocks_sql_data/blocks_sql_data_db.db' #это же старая настройка? сейчас ее надо хранить в рантайм
+BLOCKS_SQL_DATA = RUNTIME_BLOCKS_SQL_DATA
 
 
 BLOCK_HEIGHT_BLOCK_TIME_MAP_DIR_FILE = BASE_DIR / 'data/block_height_block_time_map/map.parquet'

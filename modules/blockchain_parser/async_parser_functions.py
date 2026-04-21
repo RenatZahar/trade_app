@@ -65,16 +65,20 @@ def retry(max_attempts=3, delay=1, exceptions=(Exception,)):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             attempt = 0
+            last_exception = None
             while attempt < max_attempts:
                 try:
                     return await func(*args, **kwargs)
                 except exceptions as e:
+                    last_exception = e
                     attempt += 1
                     logger.warning(f"Попытка {attempt} для функции {func.__name__} не удалась: {e}")
                     if attempt < max_attempts:
                         await asyncio.sleep(delay)
             logger.error(f"Все {max_attempts} попыток для функции {func.__name__} не удались.")
-            raise Exception(f"Функция {func.__name__} не смогла завершиться успешно после {max_attempts} попыток.")
+            raise RuntimeError(
+                f"Функция {func.__name__} не смогла завершиться успешно после {max_attempts} попыток."
+            ) from last_exception
         return wrapper
     return decorator
     
@@ -97,6 +101,7 @@ async def async_vacuum_analyze(db_path):
             logger.info("VACUUM и ANALYZE успешно выполнены.")
     except Exception as e:
         logger.error(f"Ошибка при выполнении VACUUM/ANALYZE: {e}")
+        raise
 
 async def async_set_foreign_keys(db_path, enable=False):
     try:
@@ -106,6 +111,7 @@ async def async_set_foreign_keys(db_path, enable=False):
             logger.info(f"PRAGMA foreign_keys установлен на {'ON' if enable else 'OFF'}.")
     except Exception as e:
         logger.error(f"Ошибка при установке PRAGMA foreign_keys: {e}")
+        raise
 
 async def async_set_cache_size(db_path, cache_size=-2000000):
     try:
@@ -145,6 +151,7 @@ async def async_create_indexes(db_path, table_name='data_table'):
             logger.info(f"Индексы на Wallet_id и Block_height успешно созданы или уже существуют.")
     except Exception as e:
         logger.error(f"Ошибка при создании индексов: {e}")
+        raise
     finally:
         end_time = time.perf_counter()
         elapsed_time = end_time - start_time
@@ -169,6 +176,7 @@ async def async_create_table(db_path, table_name='data_table'):
             logger.info(f"Таблица '{table_name}' успешно создана или уже существует.")
     except Exception as e:
         logger.error(f"Ошибка при создании таблицы: {e}")
+        raise
 
 async def init_db_mod(db_path, table_name='data_table'):
     await async_set_foreign_keys(db_path, enable=True)
@@ -194,6 +202,7 @@ async def async_print_db_schema(db_path, table_name='data_table'):
                 logger.warning(f"Таблица '{table_name}' не найдена.")
     except Exception as e:
         logger.error(f"Ошибка при получении схемы базы данных: {e}")
+        raise
 
 def init_cache():
     global tx_cache, blocks_hash_cache
@@ -323,7 +332,7 @@ async def async_get_existing_last_block(db_path, start_block):
             return last_block
     except Exception as e:
         logger.error(f"Ошибка при доступе к базе данных: {e}")
-        return start_block
+        raise
     # logger.info(f"Время выполнения async_get_existing_last_block: {elapsed_time:.6f} секунд")
 
 def get_bicoin_prices(filepath):
@@ -409,6 +418,8 @@ def get_rpc_connection():
 
 def sync_rpc_connection(rpc_connection, rpc_method, *args):
     responses = []
+    batch = None
+    attempt = 0
     try:
         if rpc_method is None:
             if len(args) == 1 and isinstance(args[0], list):
@@ -431,6 +442,8 @@ def sync_rpc_connection(rpc_connection, rpc_method, *args):
                             logger.error('sync_rpc_connection, ответ:')
                             logger.error(responses)
                             logger.error(f'Пакетная ошибка: {e}, попытка {attempt} для пакета')
+                    if attempt >= 30:
+                        raise RuntimeError(f"Пакетный RPC-запрос не выполнился после {attempt} попыток.")
                 return responses
             else:
                 raise ValueError("Некорректный формат аргументов для batch-запроса")
@@ -439,17 +452,19 @@ def sync_rpc_connection(rpc_connection, rpc_method, *args):
             response = method(*args)
             return response
     except Exception as e:
-        logger.warning(f'Размер запроса: {len(batch)}')
+        if batch is not None:
+            logger.warning(f'Размер запроса: {len(batch)}')
         logger.error(f"Ошибка: {e}, ожидаем, попытка {attempt}")
         logger.warning(f'rpc_method: {rpc_method}, *args: {args}')
-    logger.error("Не удалось установить соединение после 150 попыток.")
-    return None
+        logger.error("Не удалось установить соединение после 150 попыток.")
+        raise RuntimeError("Не удалось выполнить RPC-запрос синхронно.") from e
 
 async def async_rpc_connection(rpc_method, height, *args):
     global last_request_time, rpc_user, rpc_password, rpc_host, rpc_port
     url = f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}"
     headers = {'content-type': 'application/json', 'Connection': 'close'}
     timeout = ClientTimeout(total=360)
+    last_exception = None
     async with aiohttp.ClientSession(timeout=timeout) as session:
         for i in range(150):  
             if last_request_time is not None:
@@ -479,13 +494,14 @@ async def async_rpc_connection(rpc_method, height, *args):
                         await asi_sleep(attempt)
 
             except Exception as e:
+                last_exception = e
                 logger.error(f'Ошибка запроса: {e}, блок {height}')
                 logger.error(f'Попытка {i+1}')
                 logger.error(exc_info=True)
                 await asyncio.sleep(10)  # Задержка перед повторной попыткой
 
         logger.error("Не удалось установить соединение после 150 попыток.")
-        raise Exception("Не удалось установить соединение после 150 попыток.")
+        raise RuntimeError("Не удалось установить соединение после 150 попыток.") from last_exception
 
 async def asi_sleep(attempt):
     if attempt > 50 and attempt < 100:
@@ -729,6 +745,7 @@ async def async_check_block_height_data(db_path, table_name='data_table'):
                     logger.info(f" - Значение: {value}, Тип данных: {value_type}")
     except Exception as e:
         logger.error(f"Ошибка при проверке данных столбца 'Block_height': {e}")
+        raise
 
 def records_to_df(all_records):
     # Подготовка данных к сохранению
@@ -770,7 +787,7 @@ async def async_save_data_to_db(data, db_path, table_name='data_table'):
     """
     start_time = time.perf_counter()
     try:
-        logger.info(f"Подключение к базе данных по пути: {db_path}")
+        # logger.info(f"Подключение к базе данных по пути: {db_path}")
         # Установка асинхронного соединения с базой данных
         async with aiosqlite.connect(db_path) as db:
             await db.execute("BEGIN")  # Начало транзакции
@@ -809,10 +826,11 @@ async def async_save_data_to_db(data, db_path, table_name='data_table'):
 
     except Exception as e:
         logger.error(f"Ошибка при сохранении данных в базу данных: {e}")
+        raise
     finally:
         end_time = time.perf_counter()
         elapsed_time = end_time - start_time
-        logger.info(f"Время выполнения async_save_data_to_db: {elapsed_time:.6f} секунд")
+        # logger.info(f"Время выполнения async_save_data_to_db: {elapsed_time:.6f} секунд")
 
 def print_cicle_info(start_time, min_block_height, max_block_height, len_blocks_group, df, quantity_of_blocks_to_download):
     global avg_cache_vin, avg_hash_for_vin

@@ -78,6 +78,10 @@ def clean_raw_data():
     # Получение максимального Block_height
     cursor.execute("SELECT MAX(Block_height) FROM data_table;")
     max_block_height = cursor.fetchone()[0]
+    if min_block_height is None or max_block_height is None:
+        cursor.close()
+        conn.close()
+        raise RuntimeError("В data_table нет данных для расчета ценового диапазона.")
 
 
     cursor.execute("SELECT Block_time FROM data_table WHERE Block_height = ? LIMIT 1;", (min_block_height,))
@@ -121,7 +125,7 @@ def clean_raw_data():
     downloaded_price_data = get_price_data(start_time_ms, end_time_ms)
     
     if not downloaded_price_data:
-        return
+        raise RuntimeError("Не получилось обновить данные BTC из внешнего источника.")
     
     end_work_time = time.time()
     logger.info(f"Завершение get_price_data. Время выполнения: {(end_work_time-start_work_time):.1f} секунд")

@@ -21,16 +21,20 @@ def retry(max_attempts=3, delay=1, exceptions=(Exception,)):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             attempt = 0
+            last_exception = None
             while attempt < max_attempts:
                 try:
                     return await func(*args, **kwargs)
                 except exceptions as e:
+                    last_exception = e
                     attempt += 1
                     logger.warning(f"Попытка {attempt} для функции {func.__name__} не удалась: {e}")
                     if attempt < max_attempts:
                         await asyncio.sleep(delay)
             logger.error(f"Все {max_attempts} попыток для функции {func.__name__} не удались.")
-            raise Exception(f"Функция {func.__name__} не смогла завершиться успешно после {max_attempts} попыток.")
+            raise RuntimeError(
+                f"Функция {func.__name__} не смогла завершиться успешно после {max_attempts} попыток."
+            ) from last_exception
         return wrapper
     return decorator
 
@@ -42,8 +46,7 @@ async def async_set_journal_mode_wal(db_path):
             await db.commit()
             logger.info("Режим журналирования установлен на WAL.")
     except Exception as e:
-        logger.error(f"Ошибка при установке journal_mode: {e}")
-        raise e
+        logger.warning(f"Не удалось установить journal_mode=WAL: {e}")
 
 async def async_vacuum_analyze(db_path):
     try:
@@ -53,7 +56,7 @@ async def async_vacuum_analyze(db_path):
             await db.commit()
             logger.info("VACUUM и ANALYZE успешно выполнены.")
     except Exception as e:
-        logger.error(f"Ошибка при выполнении VACUUM/ANALYZE: {e}")
+        logger.warning(f"Не удалось выполнить VACUUM/ANALYZE: {e}")
 
 async def async_set_foreign_keys(db_path, enable=False):
     try:
@@ -62,7 +65,7 @@ async def async_set_foreign_keys(db_path, enable=False):
             await db.commit()
             logger.info(f"PRAGMA foreign_keys установлен на {'ON' if enable else 'OFF'}.")
     except Exception as e:
-        logger.error(f"Ошибка при установке PRAGMA foreign_keys: {e}")
+        logger.warning(f"Не удалось установить PRAGMA foreign_keys: {e}")
 
 async def async_set_cache_size(db_path, cache_size=-2000000):
     try:
@@ -71,7 +74,7 @@ async def async_set_cache_size(db_path, cache_size=-2000000):
             await db.commit()
             logger.info(f"PRAGMA cache_size установлен на {cache_size}.")
     except Exception as e:
-        logger.error(f"Ошибка при установке PRAGMA cache_size: {e}")
+        logger.warning(f"Не удалось установить PRAGMA cache_size: {e}")
 
 async def async_set_synchronous_normal(db_path):
     try:
@@ -80,7 +83,7 @@ async def async_set_synchronous_normal(db_path):
             await db.commit()
             logger.info("PRAGMA synchronous установлен на NORMAL.")
     except Exception as e:
-        logger.error(f"Ошибка при установке PRAGMA synchronous: {e}")
+        logger.warning(f"Не удалось установить PRAGMA synchronous: {e}")
 
 async def async_create_indexes(db_path, table_name='data_table'):
     start_time = time.perf_counter()
@@ -102,6 +105,7 @@ async def async_create_indexes(db_path, table_name='data_table'):
             logger.info(f"Индексы на Wallet_id и Block_height успешно созданы или уже существуют.")
     except Exception as e:
         logger.error(f"Ошибка при создании индексов: {e}")
+        raise
     finally:
         end_time = time.perf_counter()
         elapsed_time = end_time - start_time
@@ -126,6 +130,7 @@ async def async_create_table(db_path, table_name='data_table'):
             logger.info(f"Таблица '{table_name}' успешно создана или уже существует.")
     except Exception as e:
         logger.error(f"Ошибка при создании таблицы: {e}")
+        raise
 
 async def init_db_mod(db_path, table_name='data_table'):
     await async_set_foreign_keys(db_path, enable=True)
@@ -170,8 +175,10 @@ async def async_alter_table_set_primary_key(db_path, table_name='data_table'):
             await db.commit()
             logger.info(f"Таблица '{table_name}' успешно изменена с Transaction_id как PRIMARY KEY.")
     except Exception as e:
-        await db.execute("ROLLBACK")
+        if 'db' in locals():
+            await db.rollback()
         logger.error(f"Ошибка при изменении структуры таблицы: {e}")
+        raise
 
 async def async_print_db_schema(db_path, table_name='data_table'):
     try:
@@ -184,6 +191,6 @@ async def async_print_db_schema(db_path, table_name='data_table'):
             else:
                 logger.warning(f"Таблица '{table_name}' не найдена.")
     except Exception as e:
-        logger.error(f"Ошибка при получении схемы базы данных: {e}")
+        logger.warning(f"Не удалось получить схему базы данных: {e}")
 
 
