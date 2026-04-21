@@ -15,6 +15,8 @@ from settings.paths import APP_TEMP_DIR, NEW_MODELS_PATH
 from modules.btc_core_init.btc_core_manager import get_btc_status, blocks_to_download
 from modules.blockchain_parser.main_parser  import parser
 from modules.redis_init.redis_init import get_redis_status, start_redis_client
+from modules.logger.run_tracker import get_current_run_tracker 
+from modules.logger import logger as app_logger_module 
 
 logger = logging.getLogger('app')
 
@@ -82,15 +84,28 @@ def start_blockchain_parser():
     global parser_running
     with parser_lock:
         parser_running = True
-    threading.Thread(target=run_parser_asyncio).start()
+    parser_thread = threading.Thread(target=run_parser_asyncio)
+    parser_thread.start()
+    return parser_thread
+
+def run_parser_now_and_wait():
+    logger.info("Старт тестового запуска парсера")
+    if not start_redis():
+        raise RuntimeError("Redis client initialization failed before parser test startup.")
+    parser_thread = start_blockchain_parser()
+    parser_thread.join()
 
 
 def run_parser_asyncio():
     global parser_running
+    tracker = get_current_run_tracker()
     try:
         asyncio.run(parser())
     except Exception as e:
         logger.error(f"Ошибка в парсере блокчейна: {e}")
+        tracker.finish_run('error', e)
+        app_logger_module.log_tracker_run_event(tracker, "run_finished", level=logging.ERROR)
+        send_message('parser_status', 'completed with error')
     finally:
         with parser_lock:
             parser_running = False

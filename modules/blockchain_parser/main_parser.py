@@ -98,5 +98,6 @@ async def parser():
             stage_data = tracker.finish_stage('error', details=str(e))
             app_logger_module.log_tracker_stage_finished(tracker, stage_data)
         logger.error(f"Произошла ошибка: {e}")
+        raise
 
 
