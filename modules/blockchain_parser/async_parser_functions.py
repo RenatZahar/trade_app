@@ -1,5 +1,6 @@
 # async_parser_functions.py
 import statistics
+import copy
 import pandas as pd
 import os
 from collections import OrderedDict
@@ -162,14 +163,16 @@ async def async_create_table(db_path, table_name='data_table'):
         async with aiosqlite.connect(db_path) as db:
             await db.execute(f"""
                 CREATE TABLE IF NOT EXISTS {table_name} (
-                    Transaction_id TEXT PRIMARY KEY,
+                    Transaction_id TEXT,
                     Wallet_id TEXT,
                     Amount REAL,
                     Btc_block_time_price REAL,
                     Block_time INTEGER,
                     Block_height INTEGER,
                     Block_hash TEXT,
-                    n INTEGER
+                    n INTEGER,
+                    Transactions_Count INTEGER,
+                    UNIQUE (Transaction_id, Wallet_id, Btc_block_time_price, Block_time, Block_height, Block_hash, n)
                 );
             """)
             await db.commit()
@@ -429,7 +432,8 @@ def sync_rpc_connection(rpc_connection, rpc_method, *args):
                     attempt = 0
                     while attempt < 30:  
                         try:
-                            batch = batch_list[i:i + REQUESTS_QUANTITY]
+                            batch_source = batch_list[i:i + REQUESTS_QUANTITY]
+                            batch = copy.deepcopy(batch_source)
                             batch_responses = rpc_connection.batch_(batch)
                             responses.extend(batch_responses)
                             break  
@@ -437,10 +441,15 @@ def sync_rpc_connection(rpc_connection, rpc_method, *args):
                         except Exception as e:
                             attempt += 1
                             time.sleep(5)
+
                             logger.error('sync_rpc_connection, запрос:')
-                            logger.error(batch)
+                            batch_preview = batch[:10]
+                            logger.error(batch_preview)
+
                             logger.error('sync_rpc_connection, ответ:')
-                            logger.error(responses)
+                            responses_preview = responses[:10]
+                            logger.error(responses_preview)
+
                             logger.error(f'Пакетная ошибка: {e}, попытка {attempt} для пакета')
                     if attempt >= 30:
                         raise RuntimeError(f"Пакетный RPC-запрос не выполнился после {attempt} попыток.")
@@ -796,14 +805,16 @@ async def async_save_data_to_db(data, db_path, table_name='data_table'):
             # Создание таблицы, если она не существует
             await db.execute(f"""
                 CREATE TABLE IF NOT EXISTS {table_name} (
-                    Transaction_id TEXT PRIMARY KEY,
+                    Transaction_id TEXT,
                     Wallet_id TEXT,
                     Amount REAL,
                     Btc_block_time_price REAL,
                     Block_time INTEGER,
                     Block_height INTEGER,
                     Block_hash TEXT,
-                    n INTEGER
+                    n INTEGER,
+                    Transactions_Count INTEGER,
+                    UNIQUE (Transaction_id, Wallet_id, Btc_block_time_price, Block_time, Block_height, Block_hash, n)
                 );
             """)
             # logger.info(f"Таблица '{table_name}' проверена/создана.")
@@ -876,4 +887,5 @@ def end_of_anliz_processes(profiler):
     profiler.disable()
     stats = pstats.Stats(profiler)
     stats.sort_stats('cumtime').print_stats(30)
+
 

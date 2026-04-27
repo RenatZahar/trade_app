@@ -7,8 +7,8 @@ from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 from settings.paths import BASE_DIR
 
 LOGS_DIR = BASE_DIR / "logs"
-FILE_LOG_FORMAT = "%(asctime)s [%(levelname)s] [%(name)s] %(message)s"
-CONSOLE_LOG_FORMAT = "%(asctime)s [%(levelname)s] [%(name)s] %(message)s"
+FILE_LOG_FORMAT = "%(asctime)s [%(levelname)s] [%(name)s] [%(filename)s:%(lineno)d] %(message)s"
+CONSOLE_LOG_FORMAT = "%(asctime)s [%(levelname)s] [%(name)s] [%(filename)s:%(lineno)d] %(message)s"
 APP_LOGGER_NAME = "app"
 
 _LOG_QUEUE = None
@@ -105,5 +105,17 @@ def log_tracker_stage_finished(tracker, stage_data):
         f"duration_sec={stage_data['duration_sec']} "
         f"duration_human={stage_data['duration_human']} "
         f"details={stage_data['details']}"
+    )
+
+
+def log_tracker_stage_progress(tracker, details):
+    logger = logging.getLogger(APP_LOGGER_NAME)
+    logger.info(
+        f"_TRACKER_INFO event=stage_progress "
+        f"run_id={tracker.id} "
+        f"stage={tracker.current_stage} "
+        f"status=running "
+        f"started_at={tracker.current_stage_started_at} "
+        f"details={details}"
     )
 

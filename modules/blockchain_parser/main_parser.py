@@ -3,8 +3,7 @@ import pandas as pd
 import time
 import asyncio
 from pathlib import Path 
-import os
-import sys 
+
 from bitcoinrpc.authproxy import AuthServiceProxy
 from modules.redis_init.redis_init import send_message
 import modules.logger.logger as app_logger_module

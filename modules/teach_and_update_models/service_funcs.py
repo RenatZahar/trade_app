@@ -125,6 +125,7 @@ def get_tmsps_data_of_model(time_params):
     iterations = time_params['iterations']
     max_block_height, last_block_time = do.get_last_block_info()
     profit_test_end_tmsp = 0
+    profit_test_start_tmsp = 0
     model_relevance_end_tmsp = 0
     checkpoint_tmsp = last_block_time
     tmsps_of_iterations = {}

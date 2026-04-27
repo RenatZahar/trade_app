@@ -10,9 +10,11 @@ import modules.logger.logger as app_logger_module
 from modules.logger.run_tracker import get_current_run_tracker
 import main_functions as mf
 from settings.paths import NEW_PARAM_GRID_DIR, PARAM_GRID_DIR, PARAM_GRID_RESULTS
+from settings.paths import BLOCKS_SQL_DATA
 from . import service_funcs as sf
 from . import data_operations as do
 from . import model_classes as mc
+from modules.sql_funcs.moving_txs import warn_required_data_table_indexes
  
 import logging
 logger = logging.getLogger("app")
@@ -31,6 +33,7 @@ def main_processing_model_orchestra(model, TEST):
         # data_for_teach_df -> model_param ->.........додумать
 
     logger.warning('изучить возможноть использовать во временном ряду не только куммулятывных сумм но и скользящего среднего')
+    warn_required_data_table_indexes(BLOCKS_SQL_DATA, "teaching.correlation_pipeline")
     if TEST:
         logger.info("Тестовый режим")
         logger.info(f"Кол-во кошельков в тесте: {round((TEST*100), 2)} %")
@@ -102,6 +105,7 @@ def main_processing_model_orchestra(model, TEST):
     # sf.move_init_data(model)
 
 def teaching_with_param_grid_orchestrator(TEACHING_TEST):
+    warn_required_data_table_indexes(BLOCKS_SQL_DATA, "param_grid.correlation_pipeline")
     time_grid_params, grid_params = sf.check_for_new_param_grid()
     models_statistic_result_df = pd.DataFrame()
     if not grid_params:
