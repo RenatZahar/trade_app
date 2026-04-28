@@ -3,8 +3,7 @@ import pandas as pd
 import time
 import asyncio
 from pathlib import Path 
-import os
-import sys 
+
 from bitcoinrpc.authproxy import AuthServiceProxy
 from modules.redis_init.redis_init import send_message
 import modules.logger.logger as app_logger_module
@@ -29,7 +28,6 @@ pd.set_option('display.expand_frame_repr', False)
 # print('main_parser.py. убрать кол-во итераций, при скачивании последнего актуального блока - предусмотреть сценарий запуска парсера при появлении нового блока')
 # можно через вызов функции сдедать режим на рабочий процесс без кэша (типа если тру - MAX_LINES_IN_TX_CACHE = 0)
 # перенести функции обслуживания бд (в начале async_parser_functions) в отдельный модуль
-# сохранение кэша в файл не используется в данной версии (async_save_cache_to_file)
 
 
 # Блок 871747, 1/1

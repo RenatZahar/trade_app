@@ -5,7 +5,6 @@ import os
 from dask.distributed import Client, LocalCluster
 from dask.config import set as dask_set
 from settings.dask import DASK_SETTINGS
-from dask.distributed import wait
 
 import logging
 logger = logging.getLogger("app")
@@ -32,22 +31,6 @@ def get_dask_client(total_memory='16GB', n_workers=2, threads_per_worker=5, dash
     client = Client(cluster)
     logger.info(f"Dask dashboard is running at: {cluster.dashboard_link}")
     return client
-
-def close_dask_client_only_futures(client):
-    if client:
-        # Проверяем, есть ли активные задачи
-        active_futures = client.futures
-        if active_futures:
-            logger.info(f"Ожидание завершения {len(active_futures)} активных задач...")
-            wait(active_futures)
-            logger.info("Все активные задачи завершены.")
-
-        time.sleep(1)
-        client.shutdown()  # Корректная остановка кластера
-        client.close()     # Освобождаем сам объект клиента
-        logger.info("Dask-клиент успешно закрыт.")
-    else:
-        logger.warning("Нет активного Dask-клиента для закрытия.")
 
 def wait_for_all_tasks(client, poll_interval=1.0, max_checks=300):
     """

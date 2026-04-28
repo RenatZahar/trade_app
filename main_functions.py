@@ -4,14 +4,12 @@ import time
 import threading
 import asyncio
 import os
-import asyncio
-import shutil
 import json
 import logging
 
 from modules.redis_init.redis_init import send_message, waiting_for_message
 
-from settings.paths import APP_TEMP_DIR, NEW_MODELS_PATH
+from settings.paths import NEW_MODELS_PATH
 from modules.btc_core_init.btc_core_manager import get_btc_status, blocks_to_download
 from modules.blockchain_parser.main_parser  import parser
 from modules.redis_init.redis_init import get_redis_status, start_redis_client
@@ -119,24 +117,6 @@ def teach_and_update_models(TEACHING_TEST):
     teach_model(model_type_data, model_type, model_info, model_dir_file, TEACHING_TEST)
     
 
-def clear_all_temp_directory():
-    if not os.path.exists(APP_TEMP_DIR):
-        # МБ ПЕРЕНЕСТИ В ОТДЕЛЬНОЕ МЕСТО СОЗДАНИЕ ДИРЕКТОРИЙ? (ВРЕМЕННЫХ ТА И ПРОЧИХ)
-        os.makedirs(APP_TEMP_DIR, exist_ok=True)
-        return
-         
-    for filename in os.listdir(APP_TEMP_DIR):
-        file_path = os.path.join(APP_TEMP_DIR, filename)
-        try:
-            if os.path.isfile(file_path) or os.path.islink(file_path):
-                os.remove(file_path)  # Удаление файла или символической ссылки
-                # print(f"Файл удален: {file_path}")
-            elif os.path.isdir(file_path):
-                shutil.rmtree(file_path)  # Рекурсивное удаление директории
-                logger.info(f"Папка удалена: {file_path}")
-        except Exception as e:
-            logger.error(f"Не удалось удалить {file_path}. Причина: {e}")
-
 def start_flask():
     """Запускает Flask-приложение в отдельном потоке"""
     from modules.flask_module.fl_app import app as flask_app
@@ -181,23 +161,74 @@ def test_param_grid(TEACHING_TEST):
 
     teaching_with_param_grid_orchestrator(TEACHING_TEST)
 
-def clear_temp_directory_of_module(module_name):
-    module_temp_dir = os.path.join(APP_TEMP_DIR, module_name)
-    # ОБЬЕДИНИТЬ КАК ТО С КОДОМ СОЗДАНИЯ ДИРЕКТОРИИ ДЛЯ ВРЕМЕННЫХ ФАЙЛЛОВ?
-    # ОТДЕЛЬНАЯ ФУНКЦИЯ ДЛЯ СОХРАНЕНИЯ ФАЙЛОВ И УДАЛЕНИЕМ СТАРЫХ ПЕРЕД СОХР НОВЫХ?
-    # переделать принты на логгер 
-    if not os.path.exists(module_temp_dir):
-        return
-    
-    for filename in os.listdir(module_temp_dir):
-        file_path = os.path.join(module_temp_dir, filename)
-        try:
-            if os.path.isfile(file_path) or os.path.islink(file_path):
-                os.remove(file_path)  # Удаление файла или символической ссылки
-                # print(f"Файл удален: {file_path}")
-            elif os.path.isdir(file_path):
-                shutil.rmtree(file_path)  # Рекурсивное удаление директории
-                logger.info(f"Папка удалена: {file_path}")
-        except Exception as e:
-            logger.error(f"Не удалось удалить {file_path}. Причина: {e}")
+
+def format_downloaded_from_btc_stage_details(test_summary: dict) -> str:
+    details_payload = {
+        "requested_blocks": test_summary.get("requested_blocks", []),
+        "seed": test_summary.get("seed"),
+        "status": test_summary.get("status", "finished"),
+        "comparison_status": test_summary.get("comparison_status"),
+        "txs_moved": test_summary.get("txs_moved"),
+        "low_tx_wallet_max_tx_count": test_summary.get("low_tx_wallet_max_tx_count"),
+        "sql_source_tables": test_summary.get("sql_source_tables", []),
+        "sql_rows_count": test_summary.get("sql_rows_count", 0),
+        "chain_rows_count": test_summary.get("chain_rows_count", 0),
+        "absent_blocks_count": test_summary.get("qnt_absent_blocks", 0),
+        "absent_blocks": test_summary.get("absent_blocks", []),
+        "identical_blocks_count": test_summary.get("identical_blocks_count", 0),
+        "identical_blocks": test_summary.get("identical_blocks", []),
+        "non_identical_blocks_count": test_summary.get("non_identical_blocks_count", 0),
+        "non_identical_blocks": test_summary.get("non_identical_blocks", []),
+        "diagnostics_rows_count": test_summary.get("diagnostics_rows_count", 0),
+        "diagnostics_records": test_summary.get("diagnostics_records", []),
+        "only_in_sql_rows_count": test_summary.get("only_in_sql_rows_count", 0),
+        "only_in_btc_rows_count": test_summary.get("only_in_btc_rows_count", 0),
+        "sql_compare_parquet": test_summary.get("sql_compare_parquet"),
+        "btc_compare_parquet": test_summary.get("btc_compare_parquet"),
+        "diagnostics_parquet": test_summary.get("diagnostics_parquet"),
+        "only_in_sql_parquet": test_summary.get("only_in_sql_parquet"),
+        "only_in_btc_parquet": test_summary.get("only_in_btc_parquet"),
+    }
+    return json.dumps(details_payload, ensure_ascii=False)
+
+
+def run_downloaded_from_btc_data_test_scenario(blocks_count: int, seed: int | None = None):
+    from tests.integration_live.test_downloaded_from_btc_data import run_downloaded_from_btc_data_test
+
+    tracker = get_current_run_tracker()
+    stage_name = "integration_live.test_downloaded_from_btc_data"
+    stage_data = tracker.start_stage(stage_name)
+    app_logger_module.log_tracker_stage_started(tracker, stage_data)
+
+    try:
+        test_summary = run_downloaded_from_btc_data_test(
+            blocks_count=blocks_count,
+            seed=seed,
+        )
+    except Exception as e:
+        stage_data = tracker.finish_stage('error', details=str(e))
+        app_logger_module.log_tracker_stage_finished(tracker, stage_data)
+        raise
+
+    if not isinstance(test_summary, dict):
+        raise RuntimeError("Downloaded-from-BTC integration test must return a summary dict.")
+
+    details = format_downloaded_from_btc_stage_details(test_summary)
+    stage_data = tracker.finish_stage('success', details=details)
+    app_logger_module.log_tracker_stage_finished(tracker, stage_data)
+    logger.info(
+        "Integration/live test finished: test_name=%s requested_blocks=%s absent_blocks=%s identical_blocks=%s non_identical_blocks=%s seed=%s status=%s comparison_status=%s",
+        test_summary.get("test_name", "test_downloaded_from_btc_data"),
+        test_summary.get("requested_blocks", []),
+        test_summary.get("absent_blocks", []),
+        test_summary.get("identical_blocks", []),
+        test_summary.get("non_identical_blocks", []),
+        test_summary.get("seed"),
+        test_summary.get("status", "finished"),
+        test_summary.get("comparison_status"),
+    )
+    tracker.finish_run('success')
+    app_logger_module.log_tracker_run_event(tracker, "run_finished")
+    return test_summary
+
 

@@ -14,7 +14,6 @@ import sys
 import math
 import gc
 import json
-import numpy as np
 from sklearn.metrics import f1_score, precision_score, recall_score
 import warnings
 
@@ -22,7 +21,6 @@ import dask.dataframe as dd
 from dask.distributed import Client, LocalCluster, wait
 from sklearn.preprocessing import StandardScaler
 
-from operator import itemgetter
 from dask.delayed import delayed
 from datetime import datetime, timedelta
 from dask.distributed import as_completed

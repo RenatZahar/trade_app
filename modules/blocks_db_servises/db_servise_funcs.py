@@ -1,13 +1,8 @@
 # db_servise_funcs.py
-import pandas as pd
-from datetime import datetime
-from collections import OrderedDict
+
 import time
 import asyncio
-# from config import CLEARED_PRICES_DIR # type: ignore #переменные подгружаются корректно, проблема в папках
-import sqlite3
 import aiosqlite
-from functools import wraps
 import aiosqlite
 import asyncio
 import time

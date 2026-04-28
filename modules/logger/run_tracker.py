@@ -128,4 +128,6 @@ class RunTracker():
 
 
 def get_current_run_tracker():
+    if CURRENT_RUN_TRACKER is None:
+        raise RuntimeError("RunTracker is not initialized for the current runtime lifecycle.")
     return CURRENT_RUN_TRACKER
