@@ -5,26 +5,18 @@ import pandas as pd
 import os
 from collections import OrderedDict
 from bitcoinrpc.authproxy import AuthServiceProxy
-import cProfile
-import pstats
 import json
 import time
 import pickle
 import gc
 import asyncio
 import aiohttp
-import aiofiles
 from aiohttp import ClientTimeout
 import traceback
 import sqlite3
 import aiosqlite
 from functools import wraps
-import aiosqlite
-import asyncio
-import time
-import traceback
 import numpy as np
-import sys
 
 from modules.redis_init.redis_init import send_message
 
@@ -248,22 +240,6 @@ def open_blocks_hash_cache(filename):
             logger.info(f'Читаем {filename} из файла')
             return cache
 
-async def async_save_cache_to_file(cache, filename):
-    loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, lambda: save_cache_to_file(cache, filename))
-
-async def save_caches():
-    await async_save_cache_to_file(blocks_hash_cache, 'blocks_hash_cache.pkl')
-    await async_save_cache_to_file(tx_cache, 'tx_cache.pkl')
-
-async def save_cache_to_file(cache, filename):
-    logger.info(f'Старт сохранения: {filename}')
-    current_dir = os.path.dirname(os.path.realpath(__file__))
-    cache_file_path = os.path.join(current_dir, filename)
-    async with aiofiles.open(cache_file_path, 'wb') as file:
-        await file.write(pickle.dumps(cache))
-    logger.info(f'Сохранение завершено: {filename}')
-
 def general_cleaning_of_caches():
     global tx_cache, blocks_hash_cache
     if len(tx_cache) > MAX_LINES_IN_TX_CACHE:
@@ -404,13 +380,6 @@ async def amount_and_counbase_filter(tx_list):
                 count += 1  
     tx_list = []
     return filtered_tx_details_list
-
-def check_time(stats):
-    sync_rpc_stats = stats.stats[('парсинг транзакций\\parsing\\однопоточный скрипт с batch\\sync_fun.py', '148', 'sync_rpc_connection')]
-    sync_rpc_time = sync_rpc_stats[3] 
-    total_time = sum([info[3] for info in stats.stats.values()])
-    percentage = (sync_rpc_time / total_time) * 100
-    logger.info(f"Функция sync_rpc_connection занимает {percentage:.2f}% общего времени выполнения.")
 
 def get_rpc_connection():
     global rpc_user, rpc_password, rpc_host, rpc_port
@@ -735,27 +704,6 @@ def get_statistik_data(data):
     max_block_height = data['Block_height'].max()
     return min_block_height, max_block_height
 
-async def async_check_block_height_data(db_path, table_name='data_table'):
-    try:
-        async with aiosqlite.connect(db_path) as db:
-            cursor = await db.execute(f"SELECT Block_height FROM {table_name};")
-            rows = await cursor.fetchall()
-            await cursor.close()
-            non_int_values = []
-            for row in rows:
-                value = row[0]
-                if not isinstance(value, int):
-                    non_int_values.append((value, type(value)))
-            logger.info(f"Количество строк: {len(rows)}")
-            logger.info(f"Количество значений Block_height, которые не являются int: {len(non_int_values)}")
-            if non_int_values:
-                logger.info("Значения Block_height, не являющиеся int:")
-                for value, value_type in non_int_values[:10]:  # Выводим первые 10
-                    logger.info(f" - Значение: {value}, Тип данных: {value_type}")
-    except Exception as e:
-        logger.error(f"Ошибка при проверке данных столбца 'Block_height': {e}")
-        raise
-
 def records_to_df(all_records):
     # Подготовка данных к сохранению
     df = pd.DataFrame(all_records, columns=['Transaction_id', 'Wallet_id', 'Amount', 'Btc_block_time_price', 'Block_time', 'Block_height', 'Block_hash', 'n'])
@@ -878,14 +826,4 @@ def get_avg_blocks_in_minut(time_of_circle):
         logger.info(f'За последние пять блоков: {round((five_times/5), 2)} блоков/мин')
     logger.info(f'\n\033[93mСредняя скорость за {len(avg_times)} итераций: {round(total_avg_time, 2)} блоков/мин\033[0m')
     
-def start_anliz_processes():
-    profiler = cProfile.Profile()
-    profiler.enable()
-    return profiler
-        
-def end_of_anliz_processes(profiler):
-    profiler.disable()
-    stats = pstats.Stats(profiler)
-    stats.sort_stats('cumtime').print_stats(30)
-
 

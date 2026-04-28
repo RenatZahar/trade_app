@@ -1,14 +1,25 @@
 # moving_txs.py
+#
+# LEGACY MAINTENANCE NOTE:
+# Текущий подход физически переносит строки между data_table и few_tx_wallets.
+# На сотнях миллионов строк это слишком дорогая конструкция. Не удаляем файл,
+# пока не реализована новая модель сбора данных через wallet_stats / флаги
+# классификации кошельков, но новые оптимизации лучше проектировать вокруг
+# фильтрации pipeline-запросов, а не вокруг массового переноса строк.
 
 import sqlite3
 import traceback
 import time
-import sys
 import re
 from datetime import datetime
 from pathlib import Path
 from settings.paths import BLOCKS_SQL_DATA
-from settings.sql import LOW_TX_WALLET_MAX_TX_COUNT, SQL_LIMIT_BATCH_SIZE, SQL_RETURN_BATCH_SIZE
+from settings.sql import (
+    LOW_TX_WALLET_MAX_TX_COUNT,
+    SQL_MOVE_TXS_BACK_BATCH_ROWS,
+    SQL_MOVE_TXS_BATCH_ROWS,
+    SQL_RETURN_BATCH_SIZE,
+)
 
 import logging
 logger = logging.getLogger("app")
@@ -105,22 +116,6 @@ class ProgressReporter:
         while progress_pct >= self.next_progress_pct:
             self.next_progress_pct += self.percent_step
 
-def list_tables(db_path):
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        SELECT name
-        FROM sqlite_master
-        WHERE type='table'
-          AND name IN ('data_table', 'few_tx_wallets');
-        """
-    )
-    tables = [row[0] for row in cursor.fetchall()]
-    cursor.close()
-    conn.close()
-    return tables
-
 def check_db_structures(db_path):
     """
     Быстрая проверка совместимости рабочих таблиц без сканирования всех данных.
@@ -137,49 +132,6 @@ def check_db_structures(db_path):
         cursor.close()
         conn.close()
 
-
-def check_db(db_path):
-    """
-    Тяжелая сервисная очистка: проверяет структуру и удаляет полные дубли из data_table.
-    Не вызывать внутри штатного move_txs: на сотнях миллионов строк GROUP BY по всем
-    колонкам занимает очень много времени.
-    """
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    try:
-        # 1) проверяем структуру таблиц
-        if not check_table_structures(conn, 'few_tx_wallets', 'data_table'):
-            raise RuntimeError("Структуры таблиц не совпадают!")
-
-        # 2) удаляем полные дубликаты строк из data_table
-        #    — оставляем только одну строку для каждой комбинации значений во всех столбцах
-        cursor.execute("PRAGMA table_info(data_table);")
-        cols = [r[1] for r in cursor.fetchall()]
-        if not cols:
-            raise RuntimeError("data_table не содержит столбцов")
-
-        #комментарий: строим GROUP BY по всем колонкам (кавычки на случай спец.символов)
-        group_by = ", ".join(['"{}"'.format(c) for c in cols])
-
-        #комментарий: удаляем все дубликаты, оставляя строку с минимальным rowid для каждой полной комбинации значений
-        sql = (
-            "DELETE FROM {tbl} "
-            "WHERE rowid NOT IN ("
-            "  SELECT MIN(rowid) FROM {tbl} "
-            "  GROUP BY {grp}"
-            ");"
-        ).format(tbl="data_table", grp=group_by)
-
-        cursor.execute(sql)
-        conn.commit()
-    except Exception as e:
-        logger.error(f"Ошибка при проверке и очистке БД: {e}")
-        conn.rollback()
-        raise
-
-    finally:
-        cursor.close()
-        conn.close()
 
 def get_table_columns(conn, table_name):
     cursor = conn.cursor()
@@ -212,79 +164,35 @@ def check_table_structures(conn, table1, table2):
     logger.info("Структуры таблиц совпадают.")
     return True
 
-def get_unique_indices(conn, table_name):
-    cursor = conn.cursor()
-    cursor.execute(f"PRAGMA index_list({table_name});")
-    # [('0', 'sqlite_autoindex_data_table_1', 1, ...), ...]
-    unique_indices = [row[1] for row in cursor.fetchall() if row[2]]
-    cursor.close()
-    return unique_indices
-
-
-def drop_data_table_indexes(db_path):
+def create_wallet_id_index(db_path, table_name='data_table', index_name='idx_wallet_id'):
     """
-    Историческая функция для агрессивных bulk-сценариев.
-    В штатном move_txs больше не используется: индекс Wallet_id нужен для больших
-    GROUP BY/JOIN, а финальное состояние БД должно сохранять рабочие индексы.
+    Создает индекс Wallet_id для таблицы, участвующей в maintenance-переносе.
     """
-    logger.info('start drop_data_table_indexes')
+    logger.info('start create_wallet_id_index table=%s index=%s', table_name, index_name)
     conn = None
     cursor = None
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute(
-            """
-            SELECT name
-            FROM sqlite_master
-            WHERE type='index'
-              AND tbl_name='data_table'
-              AND sql IS NOT NULL;
-            """
-        )
-        index_names = [row[0] for row in cursor.fetchall()]
-        for index_name in index_names:
-            cursor.execute(f"DROP INDEX IF EXISTS {index_name};")
-        conn.commit()
-        logger.info(f"Индексы data_table удалены: {index_names}")
-    except Exception as e:
-        logger.error(f"Ошибка при удалении индексов data_table: {e}")
-        if conn:
-            conn.rollback()
-        raise
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-
-def create_wallet_id_index(db_path):
-    """
-    Создает только индекс Wallet_id, который нужен для GROUP BY/JOIN в move_txs.
-    Остальные рабочие индексы создаются уже после rebuild/swap.
-    """
-    logger.info('start create_wallet_id_index')
-    conn = None
-    cursor = None
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='data_table';"
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?;",
+            (table_name,)
         )
         if not cursor.fetchone():
-            logger.info("Таблица data_table не найдена. Пропускаем idx_wallet_id.")
+            logger.info("Таблица %s не найдена. Пропускаем индекс Wallet_id.", table_name)
             return
-        cursor.execute("PRAGMA table_info(data_table);")
+        cursor.execute("PRAGMA table_info({});".format(quote_identifier(table_name)))
         cols = [col[1] for col in cursor.fetchall()]
         if 'Wallet_id' in cols:
             cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_wallet_id ON data_table (Wallet_id);"
+                "CREATE INDEX IF NOT EXISTS {} ON {} (Wallet_id);".format(
+                    quote_identifier(index_name),
+                    quote_identifier(table_name),
+                )
             )
         conn.commit()
     except Exception as e:
-        logger.error(f"Ошибка при создании idx_wallet_id: {e}")
+        logger.error(f"Ошибка при создании индекса Wallet_id: {e}")
         if conn:
             conn.rollback()
         raise
@@ -293,6 +201,103 @@ def create_wallet_id_index(db_path):
             cursor.close()
         if conn:
             conn.close()
+
+
+def create_wallet_id_indexes_for_move(db_path):
+    create_wallet_id_index(db_path, table_name='data_table', index_name='idx_wallet_id')
+    create_wallet_id_index(
+        db_path,
+        table_name='few_tx_wallets',
+        index_name='idx_few_tx_wallets_wallet_id',
+    )
+
+
+def drop_non_wallet_data_table_indexes(db_path):
+    """
+    На массовом DELETE индексы Block_height/Block_time заметно замедляют перенос.
+    Wallet_id оставляем, потому что он нужен для выборки и удаления батчей.
+    """
+    logger.info("start drop_non_wallet_data_table_indexes")
+    conn = None
+    cursor = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        for index_name in ("idx_block_height", "idx_txs_blocktime"):
+            cursor.execute("DROP INDEX IF EXISTS {};".format(quote_identifier(index_name)))
+        conn.commit()
+        logger.info("Не-Wallet индексы data_table удалены перед bulk-переносом.")
+    except Exception as e:
+        logger.error("Ошибка при удалении не-Wallet индексов data_table: %s", e)
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def drop_data_table_runtime_indexes(db_path):
+    """
+    Удаляет рабочие индексы data_table перед массовым INSERT.
+    На возврате few_tx_wallets -> data_table они не помогают выборке, но сильно
+    увеличивают цену записи. После успешного возврата create_indexes() создаст
+    их заново.
+    """
+    logger.info("start drop_data_table_runtime_indexes")
+    conn = None
+    cursor = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        for index_name in (
+            "idx_wallet_id",
+            "idx_block_height",
+            "idx_txs_blocktime",
+            "idx_block_height_wallet_id",
+        ):
+            cursor.execute("DROP INDEX IF EXISTS {};".format(quote_identifier(index_name)))
+        conn.commit()
+        logger.info("Рабочие индексы data_table удалены перед move_txs_back.")
+    except Exception as e:
+        logger.error("Ошибка при удалении рабочих индексов data_table: %s", e)
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def drop_index_if_exists(db_path, index_name):
+    """
+    Удаляет один индекс, если он есть. Используется в maintenance-сценариях,
+    когда цена поддержки индекса выше пользы от него на текущем этапе.
+    """
+    logger.info("start drop_index_if_exists index=%s", index_name)
+    conn = None
+    cursor = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("DROP INDEX IF EXISTS {};".format(quote_identifier(index_name)))
+        conn.commit()
+        logger.info("Индекс %s удален или отсутствовал.", index_name)
+    except Exception as e:
+        logger.error("Ошибка при удалении индекса %s: %s", index_name, e)
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 
 def return_few_tx_wallets_to_data_table(db_path,
                                         source_table='few_tx_wallets',
@@ -315,6 +320,8 @@ def return_few_tx_wallets_to_data_table(db_path,
         apply_maintenance_pragmas(cursor)
         total_rows = get_count_in_table(db_path, table_name=source_table) or 0
         processed_rows = 0
+        batch_number = 0
+        total_batches = (total_rows + batch_size - 1) // batch_size if batch_size else 0
         progress_reporter = ProgressReporter(
             total_items=total_rows,
             step_name=f"{source_table}_to_{target_table}",
@@ -322,19 +329,23 @@ def return_few_tx_wallets_to_data_table(db_path,
         )
 
         # Получаем список столбцов для INSERT
-        cursor.execute("PRAGMA table_info({});".format(source_table))
+        cursor.execute("PRAGMA table_info({});".format(quote_identifier(source_table)))
         cols = [col[1] for col in cursor.fetchall()]
 
-        col_list = ", ".join(cols)
+        col_list = ", ".join(quote_identifier(col) for col in cols)
         insert_sql = (
             "INSERT INTO {tgt} ({cols}) "
             "SELECT {cols} FROM {src} "
             "WHERE rowid IN (SELECT source_rowid FROM temp_return_rowids);"
-        ).format(tgt=target_table, cols=col_list, src=source_table)
+        ).format(
+            tgt=quote_identifier(target_table),
+            cols=col_list,
+            src=quote_identifier(source_table),
+        )
         delete_sql = (
             "DELETE FROM {src} "
             "WHERE rowid IN (SELECT source_rowid FROM temp_return_rowids);"
-        ).format(src=source_table)
+        ).format(src=quote_identifier(source_table))
 
         cursor.execute(
             """
@@ -347,6 +358,7 @@ def return_few_tx_wallets_to_data_table(db_path,
         
         logger.info("Старт переноса")
         while True:
+            batch_started_at = time.perf_counter()
             cursor.execute("BEGIN;")
             cursor.execute("DELETE FROM temp_return_rowids;")
             cursor.execute(
@@ -355,7 +367,7 @@ def return_few_tx_wallets_to_data_table(db_path,
                 SELECT rowid
                 FROM {src}
                 LIMIT ?;
-                """.format(src=source_table),
+                """.format(src=quote_identifier(source_table)),
                 (batch_size,)
             )
 
@@ -369,7 +381,22 @@ def return_few_tx_wallets_to_data_table(db_path,
             cursor.execute(delete_sql)
             conn.commit()
             processed_rows += batch_count
-            logger.info("Перенесено {} строк".format(batch_count))
+            batch_number += 1
+            batch_sec = max(time.perf_counter() - batch_started_at, 1e-9)
+            remaining_batches = max(total_batches - batch_number, 0)
+            eta_by_last_batch = int(remaining_batches * batch_sec)
+            logger.info(
+                "Батч %s/%s %s -> %s: rows=%s processed=%s total=%s batch_sec=%.2f eta_by_last_batch=%s",
+                batch_number,
+                total_batches or "?",
+                source_table,
+                target_table,
+                batch_count,
+                processed_rows,
+                total_rows,
+                batch_sec,
+                format_seconds_human(eta_by_last_batch),
+            )
             progress_reporter.emit(processed_rows)
 
         logger.info("Все данные успешно перемещены из {} в {}.".format(source_table, target_table))
@@ -437,6 +464,23 @@ def create_target_table(db_path, target_table='few_tx_wallets', source_table='da
 
 def quote_identifier(identifier):
     return '"{}"'.format(str(identifier).replace('"', '""'))
+
+
+def table_exists(conn, table_name):
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT 1
+            FROM sqlite_master
+            WHERE type='table'
+              AND name=?;
+            """,
+            (table_name,),
+        )
+        return cursor.fetchone() is not None
+    finally:
+        cursor.close()
 
 
 def get_table_column_names(conn, table_name):
@@ -544,6 +588,442 @@ def create_wallet_targets_table(db_path,
             cursor.close()
         if conn:
             conn.close()
+
+
+def cleanup_stale_rebuild_tables(db_path):
+    """
+    Удаляет черновики старого rebuild/swap-подхода.
+    Backup-таблицы здесь намеренно не трогаем: если когда-то swap уже произошел,
+    удалять backup можно только после явной проверки состояния БД.
+    """
+    logger.info("start cleanup_stale_rebuild_tables")
+    conn = None
+    cursor = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        for index_name in (
+            'idx_service_wallet_move_plan_batch',
+            'idx_service_wallet_move_plan_direction',
+        ):
+            cursor.execute("DROP INDEX IF EXISTS {};".format(quote_identifier(index_name)))
+        for table_name in (
+            'temp_wallets',
+            'service_wallet_targets',
+            'service_move_to_few_rowids',
+            'service_move_to_data_rowids',
+            'service_rebuild_data_table',
+            'service_rebuild_few_tx_wallets',
+            'service_wallet_counts_data',
+            'service_wallet_counts_storage',
+            'service_wallet_move_meta',
+        ):
+            cursor.execute("DROP TABLE IF EXISTS {};".format(quote_identifier(table_name)))
+        conn.commit()
+        logger.info("Старые service/rebuild-таблицы очищены.")
+    except Exception as e:
+        logger.error("Ошибка при очистке старых service/rebuild-таблиц: %s", e)
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def create_wallet_move_plan(db_path,
+                            txs_count,
+                            plan_table='service_wallet_move_plan',
+                            meta_table='service_wallet_move_meta',
+                            data_table='data_table',
+                            storage_table='few_tx_wallets'):
+    """
+    Создает возобновляемый план переносов:
+    wallet_id + source_table + target_table + rows_count.
+
+    Если plan_table уже существует, считаем, что предыдущий прогон был прерван,
+    и продолжаем с оставшихся строк вместо пересчета GROUP BY.
+    """
+    logger.info("start create_wallet_move_plan")
+    conn = None
+    cursor = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        apply_large_scan_pragmas(cursor)
+
+        if table_exists(conn, plan_table):
+            logger.info(
+                "Найдена существующая %s. Продолжаем без пересчета GROUP BY/SUM по плану.",
+                plan_table,
+            )
+            return
+
+        cursor.execute("BEGIN;")
+        cursor.execute("DROP TABLE IF EXISTS {};".format(quote_identifier(meta_table)))
+        cursor.execute(
+            """
+            CREATE TABLE {plan} (
+                wallet_id TEXT NOT NULL,
+                source_table TEXT NOT NULL,
+                target_table TEXT NOT NULL,
+                rows_count INTEGER NOT NULL,
+                PRIMARY KEY (wallet_id, source_table, target_table)
+            );
+            """.format(plan=quote_identifier(plan_table))
+        )
+
+        cursor.execute("DROP TABLE IF EXISTS service_wallet_counts_data;")
+        cursor.execute("DROP TABLE IF EXISTS service_wallet_counts_storage;")
+        cursor.execute(
+            """
+            CREATE TABLE service_wallet_counts_data AS
+            SELECT Wallet_id AS wallet_id, COUNT(*) AS rows_count
+            FROM {data_table}
+            WHERE Wallet_id IS NOT NULL
+            GROUP BY Wallet_id;
+            """.format(data_table=quote_identifier(data_table))
+        )
+        cursor.execute(
+            """
+            CREATE TABLE service_wallet_counts_storage AS
+            SELECT Wallet_id AS wallet_id, COUNT(*) AS rows_count
+            FROM {storage_table}
+            WHERE Wallet_id IS NOT NULL
+            GROUP BY Wallet_id;
+            """.format(storage_table=quote_identifier(storage_table))
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_service_wallet_counts_data_wallet_id "
+            "ON service_wallet_counts_data(wallet_id);"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_service_wallet_counts_storage_wallet_id "
+            "ON service_wallet_counts_storage(wallet_id);"
+        )
+
+        cursor.execute(
+            """
+            INSERT INTO {plan} (wallet_id, source_table, target_table, rows_count)
+            SELECT
+                d.wallet_id,
+                ?,
+                ?,
+                d.rows_count
+            FROM service_wallet_counts_data AS d
+            LEFT JOIN service_wallet_counts_storage AS s
+              ON s.wallet_id = d.wallet_id
+            WHERE d.rows_count + COALESCE(s.rows_count, 0) <= ?;
+            """.format(plan=quote_identifier(plan_table)),
+            (data_table, storage_table, txs_count),
+        )
+        cursor.execute(
+            """
+            INSERT INTO {plan} (wallet_id, source_table, target_table, rows_count)
+            SELECT
+                s.wallet_id,
+                ?,
+                ?,
+                s.rows_count
+            FROM service_wallet_counts_storage AS s
+            LEFT JOIN service_wallet_counts_data AS d
+              ON d.wallet_id = s.wallet_id
+            WHERE s.rows_count + COALESCE(d.rows_count, 0) > ?;
+            """.format(plan=quote_identifier(plan_table)),
+            (storage_table, data_table, txs_count),
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_service_wallet_move_plan_direction
+            ON {plan} (source_table, target_table);
+            """.format(plan=quote_identifier(plan_table))
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_service_wallet_move_plan_batch
+            ON {plan} (source_table, target_table, wallet_id, rows_count);
+            """.format(plan=quote_identifier(plan_table))
+        )
+        cursor.execute("DROP TABLE IF EXISTS service_wallet_counts_data;")
+        cursor.execute("DROP TABLE IF EXISTS service_wallet_counts_storage;")
+        conn.commit()
+
+        cursor.execute("SELECT COUNT(*), COALESCE(SUM(rows_count), 0) FROM {};".format(
+            quote_identifier(plan_table)
+        ))
+        plans_count, rows_count = cursor.fetchone()
+        cursor.execute(
+            """
+            CREATE TABLE {meta} (
+                key TEXT PRIMARY KEY,
+                value INTEGER NOT NULL
+            );
+            """.format(meta=quote_identifier(meta_table))
+        )
+        cursor.executemany(
+            "INSERT INTO {} (key, value) VALUES (?, ?);".format(quote_identifier(meta_table)),
+            [
+                ("plans_count", int(plans_count or 0)),
+                ("total_rows", int(rows_count or 0)),
+                ("remaining_rows", int(rows_count or 0)),
+            ],
+        )
+        conn.commit()
+        logger.info(
+            "План переносов создан: направлений=%s, строк_к_переносу=%s, порог <= %s.",
+            plans_count,
+            rows_count,
+            txs_count,
+        )
+    except Exception as e:
+        logger.error("Ошибка при создании плана переносов: %s", e)
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def select_wallet_batch_for_move(cursor,
+                                 source_table,
+                                 target_table,
+                                 batch_rows,
+                                 plan_table='service_wallet_move_plan',
+                                 wallet_scan_limit=None):
+    if wallet_scan_limit is None:
+        wallet_scan_limit = max(50000, int(batch_rows or 0))
+
+    cursor.execute(
+        """
+        SELECT wallet_id, rows_count
+        FROM {plan}
+        WHERE source_table = ?
+          AND target_table = ?
+        LIMIT ?;
+        """.format(plan=quote_identifier(plan_table)),
+        (source_table, target_table, wallet_scan_limit),
+    )
+    selected_wallets = []
+    selected_rows = 0
+    for wallet_id, rows_count in cursor.fetchall():
+        rows_count = int(rows_count or 0)
+        if selected_wallets and selected_rows + rows_count > batch_rows:
+            break
+        selected_wallets.append(wallet_id)
+        selected_rows += rows_count
+        if selected_rows >= batch_rows:
+            break
+    return selected_wallets, selected_rows
+
+
+def move_rows_by_wallet_plan(db_path,
+                             plan_table='service_wallet_move_plan',
+                             meta_table='service_wallet_move_meta',
+                             batch_rows=SQL_MOVE_TXS_BATCH_ROWS):
+    """
+    Переносит строки по service_wallet_move_plan.
+    Один батч = одна транзакция: INSERT в target, DELETE из source,
+    DELETE обработанных кошельков из plan.
+    """
+    logger.info("start move_rows_by_wallet_plan")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    try:
+        apply_large_scan_pragmas(cursor)
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_service_wallet_move_plan_batch
+            ON {plan} (source_table, target_table, wallet_id, rows_count);
+            """.format(plan=quote_identifier(plan_table))
+        )
+        conn.commit()
+
+        total_rows = 0
+        has_move_meta = table_exists(conn, meta_table)
+        if has_move_meta:
+            cursor.execute(
+                "SELECT value FROM {} WHERE key = 'remaining_rows';".format(
+                    quote_identifier(meta_table)
+                )
+            )
+            meta_row = cursor.fetchone()
+            if meta_row:
+                total_rows = int(meta_row[0])
+            else:
+                cursor.execute(
+                    "SELECT value FROM {} WHERE key = 'total_rows';".format(
+                        quote_identifier(meta_table)
+                    )
+                )
+                meta_row = cursor.fetchone()
+                total_rows = int(meta_row[0]) if meta_row else 0
+        else:
+            logger.info(
+                "Таблица %s отсутствует; полный SUM(rows_count) по plan пропущен, "
+                "процентный progress будет недоступен до следующего полного построения плана.",
+                meta_table,
+            )
+        processed_rows = 0
+        batch_number = 0
+        total_batches = (
+            (total_rows + batch_rows - 1) // batch_rows
+            if total_rows and batch_rows
+            else None
+        )
+        progress_reporter = ProgressReporter(
+            total_items=total_rows,
+            step_name='wallet_plan_move',
+            percent_step=2.0,
+        )
+
+        cursor.execute(
+            """
+            CREATE TEMP TABLE IF NOT EXISTS temp_move_wallets (
+                wallet_id TEXT PRIMARY KEY
+            );
+            """
+        )
+        conn.commit()
+
+        # Сначала возвращаем кошельки, которые уже лежат в cold storage, но больше
+        # не попадают под low-tx порог. После этого индекс few_tx_wallets.Wallet_id
+        # больше не нужен и будет удален перед тяжелым INSERT в few_tx_wallets.
+        preferred_directions = (
+            ('few_tx_wallets', 'data_table'),
+            ('data_table', 'few_tx_wallets'),
+        )
+        dropped_storage_index = False
+
+        for preferred_source, preferred_target in preferred_directions:
+            cursor.execute(
+                """
+                SELECT 1
+                FROM {plan}
+                WHERE source_table = ?
+                  AND target_table = ?
+                LIMIT 1;
+                """.format(plan=quote_identifier(plan_table)),
+                (preferred_source, preferred_target),
+            )
+            if not cursor.fetchone():
+                continue
+
+            if (
+                preferred_source == 'data_table'
+                and preferred_target == 'few_tx_wallets'
+                and not dropped_storage_index
+            ):
+                drop_index_if_exists(db_path, 'idx_few_tx_wallets_wallet_id')
+                dropped_storage_index = True
+
+            source_table, target_table = preferred_source, preferred_target
+            columns = get_table_column_names(conn, source_table)
+            column_list = ", ".join(quote_identifier(col) for col in columns)
+            source_column_list = ", ".join("src.{}".format(quote_identifier(col)) for col in columns)
+            insert_sql = """
+                INSERT INTO {target} ({columns})
+                SELECT {source_columns}
+                FROM {source} AS src
+                JOIN temp_move_wallets AS batch
+                  ON batch.wallet_id = src.Wallet_id;
+            """.format(
+                target=quote_identifier(target_table),
+                columns=column_list,
+                source_columns=source_column_list,
+                source=quote_identifier(source_table),
+            )
+            delete_source_sql = """
+                DELETE FROM {source}
+                WHERE Wallet_id IN (SELECT wallet_id FROM temp_move_wallets);
+            """.format(source=quote_identifier(source_table))
+            delete_plan_sql = """
+                DELETE FROM {plan}
+                WHERE source_table = ?
+                  AND target_table = ?
+                  AND wallet_id IN (SELECT wallet_id FROM temp_move_wallets);
+            """.format(plan=quote_identifier(plan_table))
+
+            while True:
+                wallet_ids, batch_row_count = select_wallet_batch_for_move(
+                    cursor,
+                    source_table,
+                    target_table,
+                    batch_rows,
+                    plan_table=plan_table,
+                )
+                if not wallet_ids:
+                    break
+
+                batch_started_at = time.perf_counter()
+                cursor.execute("BEGIN;")
+                cursor.execute("DELETE FROM temp_move_wallets;")
+                cursor.executemany(
+                    "INSERT INTO temp_move_wallets (wallet_id) VALUES (?);",
+                    [(wallet_id,) for wallet_id in wallet_ids],
+                )
+                cursor.execute(insert_sql)
+                inserted_count = cursor.rowcount
+                cursor.execute(delete_source_sql)
+                deleted_count = cursor.rowcount
+                cursor.execute(delete_plan_sql, (source_table, target_table))
+                if has_move_meta:
+                    cursor.execute(
+                        """
+                        UPDATE {meta}
+                        SET value = MAX(value - ?, 0)
+                        WHERE key = 'remaining_rows';
+                        """.format(meta=quote_identifier(meta_table)),
+                        (int(batch_row_count or 0),),
+                    )
+                conn.commit()
+
+                batch_number += 1
+                batch_duration_sec = time.perf_counter() - batch_started_at
+                remaining_batches = (
+                    max(total_batches - batch_number, 0)
+                    if total_batches is not None
+                    else None
+                )
+                eta_human = (
+                    format_seconds_human(remaining_batches * batch_duration_sec)
+                    if remaining_batches is not None
+                    else "unknown"
+                )
+                processed_rows += batch_row_count
+                logger.info(
+                    "Батч %s -> %s: batch=%s/%s wallets=%s planned_rows=%s "
+                    "inserted=%s deleted=%s batch_sec=%.2f eta_by_last_batch=%s",
+                    source_table,
+                    target_table,
+                    batch_number,
+                    total_batches if total_batches is not None else "unknown",
+                    len(wallet_ids),
+                    batch_row_count,
+                    inserted_count,
+                    deleted_count,
+                    batch_duration_sec,
+                    eta_human,
+                )
+                progress_reporter.emit(processed_rows)
+
+        logger.info("Перенос по service_wallet_move_plan завершен.")
+    except Exception as e:
+        logger.error("Ошибка при переносе по плану кошельков: %s", e)
+        conn.rollback()
+        raise
+    finally:
+        try:
+            cursor.execute("DROP TABLE IF EXISTS temp_move_wallets;")
+            conn.commit()
+        except Exception:
+            pass
+        cursor.close()
+        conn.close()
 
 
 def create_move_rowids_table(db_path,
@@ -946,13 +1426,18 @@ def cleanup_move_txs_service_tables(db_path):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         for table_name in (
+            'temp_wallets',
             'service_wallet_targets',
+            'service_wallet_move_plan',
+            'service_wallet_move_meta',
             'service_move_to_few_rowids',
             'service_move_to_data_rowids',
             'service_rebuild_data_table',
             'service_rebuild_few_tx_wallets',
             'service_backup_data_table',
             'service_backup_few_tx_wallets',
+            'service_wallet_counts_data',
+            'service_wallet_counts_storage',
         ):
             cursor.execute("DROP TABLE IF EXISTS {};".format(quote_identifier(table_name)))
         conn.commit()
@@ -960,58 +1445,6 @@ def cleanup_move_txs_service_tables(db_path):
         logger.info("Служебные таблицы move_txs удалены.")
     except Exception as e:
         logger.error("Ошибка при очистке служебных таблиц move_txs: {}".format(e))
-        if conn:
-            conn.rollback()
-        raise
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-
-def create_temp_wallets_table(db_path, txs_count, source_table='data_table', temp_table='temp_wallets'):
-    """
-    2. Создает служебную таблицу (temp_wallets) для хранения id кошельков, у которых количество транзакций ≤ txs_count.
-       Если таблица уже существует, создание и заполнение пропускается.
-    """
-    logger.info('start create_temp_wallets_table')
-    conn = None
-    cursor = None
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        # #comment: проверка наличия служебной таблицы
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?;", (temp_table,))
-        if cursor.fetchone():
-            logger.info(f"Таблица {temp_table} уже существует. Пропускаем создание и заполнение.")
-            return
-
-        # Создаем служебную таблицу temp_wallets
-        sql = """
-            CREATE TABLE {tmp} (
-                wallet_id TEXT PRIMARY KEY
-            );
-        """.format(tmp=temp_table)
-        cursor.execute(sql)
-        conn.commit()
-
-        # Заполняем temp_wallets идентификаторами кошельков с количеством транзакций ≤ 2
-        sql = (
-            "INSERT INTO {tmp} (wallet_id) "
-            "SELECT Wallet_id FROM ( "
-            "  SELECT Wallet_id, COUNT(*) AS cnt "
-            "  FROM {src} "
-            "  GROUP BY Wallet_id "
-            ") WHERE cnt <= ?;"
-            ).format(tmp=temp_table, src=source_table)
-        
-        cursor.execute(sql, (txs_count,))
-        conn.commit()
-        logger.info(f"Таблица {temp_table} успешно создана и заполнена.")
-    except Exception as e:
-        logger.error(f"Ошибка при создании или заполнении таблицы {temp_table}: {e}")
-        traceback.print_exc()
         if conn:
             conn.rollback()
         raise
@@ -1045,122 +1478,62 @@ def optimize_db(db_path):
         if conn:
             conn.close()
 
-def process_wallets(db_path, source_table='data_table', target_table='few_tx_wallets', 
-                    temp_table='temp_wallets', batch_size=SQL_LIMIT_BATCH_SIZE):
+
+def vacuum_db(db_path):
     """
-    Порционно обрабатывает кошельки из temp_wallets:
-    - Выбирает батчи кошельков из temp_wallets.
-    - Для каждого батча вызывает process_wallets_batch.
-    - Если temp_wallets пуста, таблица удаляется.
+    Физически перепаковывает SQLite-файл после большого возврата строк.
+    Запускать только после завершения переносов и закрытия транзакций.
     """
+    logger.info("start vacuum_db")
     conn = None
     cursor = None
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-
-        cursor.execute("SELECT COUNT(*) FROM {tmp};".format(tmp=temp_table))
-        total = cursor.fetchone()[0]
-        processed = 0
-        start_all = time.time()
-        progress_reporter = ProgressReporter(
-            total_items=total,
-            step_name=f"{source_table}_to_{target_table}_wallets",
-            percent_step=2.0,
-        )
-
-        while True:
-            cursor.execute("SELECT wallet_id FROM {tmp} LIMIT ?;".format(tmp=temp_table), (batch_size,))
-            wallets = [row[0] for row in cursor.fetchall()]
-            if not wallets:
-                logger.info(f"Таблица {temp_table} пуста. Удаляем таблицу {temp_table}.")
-                cursor.execute("DROP TABLE IF EXISTS {tmp};".format(tmp=temp_table))
-                conn.commit()
-                break
-
-            process_wallets_batch(db_path,
-                                source_table=source_table,
-                                target_table=target_table,
-                                temp_table=temp_table,
-                                wallet_ids=wallets)
-            
-            processed += len(wallets)
-            elapsed = time.time() - start_all
-            eta = (elapsed / processed) * (total - processed) / 60
-            sys.stdout.write(f'\rProcessed: {processed}/{total}, ETA: {eta:.2f} min')
-            sys.stdout.flush()
-            progress_reporter.emit(processed)
-
+        apply_large_scan_pragmas(cursor)
+        cursor.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        cursor.execute("VACUUM;")
+        cursor.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        conn.commit()
+        logger.info("VACUUM завершен.")
     except Exception as e:
-        logger.error(f"Ошибка при обработке кошельков: {e}")
-        traceback.print_exc()
-        raise
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-def process_wallets_batch(db_path, source_table='data_table', target_table='few_tx_wallets', 
-                          temp_table='temp_wallets', wallet_ids=None):
-    """
-    Обрабатывает одну порцию кошельков за одну транзакцию:
-    - Копирует все строки для указанных кошельков из source_table в target_table.
-    - Удаляет скопированные строки из source_table.
-    - Удаляет обработанные id кошельков из temp_table.
-    """
-    logger.info('start process_wallets_batch')
-
-    if not wallet_ids:
-        return
-    conn = None
-    cursor = None
-    try:
-        start_time = time.time()
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        placeholders = ','.join('?' for _ in wallet_ids)  # #comment: генерируем строку "?, ?, ... ?"
-        
-        # Начинаем транзакцию для всей порции
-        cursor.execute("BEGIN;")
-        
-        # Копируем строки из source_table в target_table для всех кошельков из списка
-        sql = (
-            "INSERT INTO {target} "
-            "SELECT * FROM {source} "
-            "WHERE Wallet_id IN ({ph});"
-        ).format(
-            target=target_table,
-            source=source_table,
-            ph=placeholders
-        )
-        cursor.execute(sql, wallet_ids)
-        
-        # Удаляем скопированные строки из source_table
-        sql = "DELETE FROM {src} WHERE Wallet_id IN ({ph});".format(
-            src=source_table,
-            ph=placeholders
-        )
-        cursor.execute(sql, wallet_ids)
-            
-        # Удаляем id кошельков из temp_table
-        query_delete_temp = "DELETE FROM {tmp} WHERE wallet_id IN ({ph});".format(
-            tmp=temp_table, ph=placeholders
-            )
-        cursor.execute(query_delete_temp, wallet_ids)
-        conn.commit()  # #comment: фиксируем транзакцию для всей группы кошельков
-        # print(f"Обработана порция из {len(wallet_ids)} кошельков.")
-    except Exception as e:
+        logger.error("Ошибка при VACUUM: %s", e)
         if conn:
             conn.rollback()
-        logger.error(f"Ошибка при обработке порции кошельков {wallet_ids}: {e}")
-        traceback.print_exc()
         raise
     finally:
         if cursor:
             cursor.close()
         if conn:
             conn.close()
+
+
+def analyze_db(db_path):
+    """
+    Обновляет статистику планировщика SQLite после финального состояния таблиц.
+    Делается после VACUUM, потому что VACUUM переписывает физический файл БД.
+    """
+    logger.info("start analyze_db")
+    conn = None
+    cursor = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        apply_large_scan_pragmas(cursor)
+        cursor.execute("ANALYZE;")
+        conn.commit()
+        logger.info("ANALYZE завершен.")
+    except Exception as e:
+        logger.error("Ошибка при ANALYZE: %s", e)
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 
 def print_now():
     logger.info(f'Старт в {datetime.now()}')
@@ -1169,6 +1542,7 @@ REQUIRED_DATA_TABLE_INDEXES = {
     "idx_wallet_id",
     "idx_block_height",
     "idx_txs_blocktime",
+    "idx_block_height_wallet_id",
 }
 
 
@@ -1270,6 +1644,11 @@ def create_indexes(db_path):
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_txs_blocktime ON data_table(Block_time);"
             )
+        if 'Block_height' in cols and 'Wallet_id' in cols:
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_block_height_wallet_id "
+                "ON data_table (Block_height, Wallet_id);"
+            )
         conn.commit()
     except Exception as e:
         logger.error(f"Ошибка при создании индексов: {e}")
@@ -1285,27 +1664,87 @@ def create_indexes(db_path):
 def moving_txs():
     print_now()
     logger.info(
-        "Старт move_txs rebuild/swap: целевое состояние кошельков будет собрано по data_table "
-        "и few_tx_wallets. Физический перенос строк через DELETE заменен пересборкой таблиц."
+        "Старт move_txs plan-based: целевое состояние кошельков будет собрано по data_table "
+        "и few_tx_wallets. Перенос выполняется батчами по кошелькам с возобновляемым "
+        "планом service_wallet_move_plan."
     )
 
     warn_required_data_table_indexes(BLOCKS_SQL_DATA, "service.move_txs")
     create_target_table(BLOCKS_SQL_DATA, target_table="few_tx_wallets", source_table="data_table")  # #коммент: гарантируем наличие хранилищной таблицы
     check_db_structures(BLOCKS_SQL_DATA)                                                            # #коммент: проверяем совместимость схем без тяжелой дедупликации
     optimize_db(BLOCKS_SQL_DATA)                                                                    # #коммент: включаем WAL/synchronous=NORMAL и temp_store=FILE для больших scan
-    create_wallet_id_index(BLOCKS_SQL_DATA)                                                         # #коммент: для GROUP BY/JOIN нужен только Wallet_id; остальные индексы строим после swap
-    create_wallet_targets_table(BLOCKS_SQL_DATA, LOW_TX_WALLET_MAX_TX_COUNT)                        # #коммент: считаем целевую таблицу кошелька по обеим таблицам
+    cleanup_stale_rebuild_tables(BLOCKS_SQL_DATA)                                                   # #коммент: удаляем черновики старых rebuild/rowid-подходов, но не трогаем active plan
+    create_wallet_id_indexes_for_move(BLOCKS_SQL_DATA)                                              # #коммент: Wallet_id нужен для GROUP BY/JOIN/DELETE в обеих рабочих таблицах
+    drop_non_wallet_data_table_indexes(BLOCKS_SQL_DATA)                                             # #коммент: Block_height/Block_time индексы замедляют массовый DELETE и будут пересозданы в конце
+    create_wallet_move_plan(BLOCKS_SQL_DATA, LOW_TX_WALLET_MAX_TX_COUNT)                            # #коммент: если plan уже существует, продолжаем с места остановки
     # ВАЖНО:
-    # До swap старые data_table/few_tx_wallets не изменяются, поэтому остановка безопасна:
-    # можно удалить service_rebuild_* и запустить сценарий заново. После swap штатный путь
-    # восстановления тот же: заново запустить move_txs и довести сценарий до конца.
-    rebuild_wallet_tables(BLOCKS_SQL_DATA)                                                            # #коммент: пересобираем обе таблицы SQL-side без массового DELETE из data_table
+    # После создания service_wallet_move_plan сценарий становится возобновляемым:
+    # каждый батч коммитит INSERT в целевую таблицу, DELETE из исходной таблицы
+    # и удаление обработанных кошельков из plan одной транзакцией.
+    # При остановке нужно просто снова запустить move_txs; пересчет GROUP BY будет пропущен.
+    move_rows_by_wallet_plan(BLOCKS_SQL_DATA, batch_rows=SQL_MOVE_TXS_BATCH_ROWS)                      # #коммент: переносим только кошельки, лежащие не в своей целевой таблице
     create_indexes(BLOCKS_SQL_DATA)                                                                   # #коммент: финальная проверка рабочих индексов data_table
     check_required_data_table_indexes(BLOCKS_SQL_DATA)                                                 # #коммент: явно подтверждаем готовность рабочей таблицы
-    cleanup_move_txs_service_tables(BLOCKS_SQL_DATA)                                                   # #коммент: удаляем service/backup-таблицы после успешной проверки
+    cleanup_move_txs_service_tables(BLOCKS_SQL_DATA)                                                   # #коммент: удаляем service-таблицы только после успешной проверки
     set_txs_moved_state(True)                                                                          # #коммент: фиксируем, что строки разнесены между data_table и few_tx_wallets
 
-    logger.info("Работа move_txs rebuild/swap завершена. Финальный COUNT(*) по большим таблицам пропущен.")
+    # TODO(iteration_12 / maintenance): рассмотреть aggressive maintenance режим
+    # для ручных окон обслуживания: locking_mode=EXCLUSIVE, больший cache_size,
+    # mmap_size и настройку checkpoint. Это может ускорить bulk-перенос, но делает
+    # БД непригодной для параллельной работы на время операции.
+    # TODO(iteration_12 / architecture): вместо физического переноса сотен миллионов
+    # строк рассмотреть таблицу классификации кошельков и фильтрацию рабочих
+    # pipeline-запросов по ней. Если цель - исключить low-tx кошельки из расчетов,
+    # это может быть быстрее и надежнее физического разнесения строк.
+
+    logger.info("Работа move_txs plan-based завершена. Финальный COUNT(*) по большим таблицам пропущен.")
+
+
+def move_txs_back(run_vacuum=True, run_analyze=True):
+    """
+    Возвращает все строки из few_tx_wallets обратно в data_table.
+
+    Сценарий нужен для выхода из legacy-модели физического разнесения строк.
+    Возврат выполняется батчами и возобновляем: если процесс остановлен,
+    следующий запуск продолжит с оставшихся строк в few_tx_wallets.
+    """
+    print_now()
+    logger.info(
+        "Старт move_txs_back: возвращаем все строки из few_tx_wallets в data_table. "
+        "После успешного завершения TXS_MOVED будет False."
+    )
+
+    create_target_table(BLOCKS_SQL_DATA, target_table="few_tx_wallets", source_table="data_table")
+    check_db_structures(BLOCKS_SQL_DATA)
+    optimize_db(BLOCKS_SQL_DATA)
+
+    # На возврате индексы data_table/few_tx_wallets не нужны для выбора батчей:
+    # работаем по rowid. Их поддержка только замедляет массовые INSERT/DELETE.
+    drop_data_table_runtime_indexes(BLOCKS_SQL_DATA)
+    drop_index_if_exists(BLOCKS_SQL_DATA, "idx_few_tx_wallets_wallet_id")
+
+    return_few_tx_wallets_to_data_table(
+        BLOCKS_SQL_DATA,
+        source_table="few_tx_wallets",
+        target_table="data_table",
+        batch_size=SQL_MOVE_TXS_BACK_BATCH_ROWS,
+    )
+
+    cleanup_move_txs_service_tables(BLOCKS_SQL_DATA)
+    create_indexes(BLOCKS_SQL_DATA)
+    check_required_data_table_indexes(BLOCKS_SQL_DATA)
+    set_txs_moved_state(False)
+
+    if run_vacuum:
+        vacuum_db(BLOCKS_SQL_DATA)
+    if run_analyze:
+        analyze_db(BLOCKS_SQL_DATA)
+
+    logger.info(
+        "move_txs_back завершен: данные собраны в data_table, service-таблицы очищены, "
+        "индексы проверены, TXS_MOVED=False."
+    )
+
 
 if __name__ == "__main__":
     moving_txs()

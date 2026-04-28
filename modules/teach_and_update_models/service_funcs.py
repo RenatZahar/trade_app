@@ -3,11 +3,9 @@
 import os
 import json
 import re
-import copy
 import numpy as np
 import itertools
 
-from numpy import append
 import pandas as pd
 from pathlib import Path 
 from datetime import datetime
@@ -17,10 +15,8 @@ from settings.paths import (
     BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE,
     NEW_MODELS_PATH,
     NEW_PARAM_GRID_DIR,
-    PARAM_GRID_DIR,
     TRAINED_MODELS_DIR,
 )
-from . import service_funcs as sf
 from . import data_operations as do
 
 import logging
@@ -58,34 +54,6 @@ def get_peaks_df():
     df = pd.read_parquet(BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE)
     df = df.sort_values('Timestamp')
     return df
-
-def move_init_data(model):
-    init_file_path = model.init_dir_file
-    if init_file_path and init_file_path[-4:] == 'json':
-        try:
-            # Проверяем, существует ли файл
-            init_file_path = Path(init_file_path)
-            if init_file_path.exists():
-                with open(init_file_path, 'r', encoding='utf-8') as file:
-                    init_json_data = json.load(file)
-                # Удаляем файл
-                init_file_path.unlink()
-                logger.info(f"Файл {init_file_path} успешно удалён.")
-            else:
-                logger.warning(f"Файл {init_file_path} не существует и не может быть удалён.")
-
-            trained_model_json_data = init_json_data.copy()
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            trained_model_json_data['model']['train_date'] = timestamp
-            trained_model_json_data['model']['profit'] = model.profit_test_df
-            model_param_path = model.model_dir / "params_json.json"
-            with open(model_param_path, 'w', encoding='utf-8') as f:
-                json.dump(trained_model_json_data, f, indent=4, ensure_ascii=False)
-        except Exception as e:
-            logger.error(f"Произошла ошибка при удалении или создании файла: {e}")    
-    else:
-        logger.warning('def move_init_data(self).json init file didn"t exist')
-        logger.warning(f'init file: {init_file_path}')
 
 def sanitize_filename(filename):
     sanitized = re.sub(r'[<>:"/\\|?*]', '-', filename) # Заменяем недопустимые символы на дефис
@@ -183,9 +151,6 @@ def check_for_new_param_grid():
     return time_params, grid_params
 
 def generate_hierarchical_grid(json_param_grid):
-    import itertools
-    from sklearn.model_selection import ParameterGrid
-
     model_config = json_param_grid["model"]
 
     # Извлекаем тип модели; если не список – оборачиваем в список

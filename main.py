@@ -52,7 +52,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "-s",
         "--service",
-        choices=["move_txs", "return_few_tx_wallets"],
+        choices=["move_txs", "return_few_tx_wallets", "move_txs_back"],
         help="Сервисные функции",
     )
     
@@ -137,6 +137,18 @@ if __name__ == "__main__":
             warn_data_table_indexes_for_scenario("service.return_few_tx_wallets")
             return_few_tx_wallets_to_data_table(BLOCKS_SQL_DATA)
             stage_data = tracker.finish_stage('success', details="return_few_tx_wallets finished")
+            app_logger_module.log_tracker_stage_finished(tracker, stage_data)
+            tracker.finish_run('success')
+            app_logger_module.log_tracker_run_event(tracker, "run_finished")
+            raise SystemExit(0)
+
+        if args.service == "move_txs_back":
+            from modules.sql_funcs.moving_txs import move_txs_back
+
+            stage_data = tracker.start_stage("service.move_txs_back")
+            app_logger_module.log_tracker_stage_started(tracker, stage_data)
+            move_txs_back()
+            stage_data = tracker.finish_stage('success', details="move_txs_back finished")
             app_logger_module.log_tracker_stage_finished(tracker, stage_data)
             tracker.finish_run('success')
             app_logger_module.log_tracker_run_event(tracker, "run_finished")

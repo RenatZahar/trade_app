@@ -4,14 +4,12 @@ import time
 import threading
 import asyncio
 import os
-import asyncio
-import shutil
 import json
 import logging
 
 from modules.redis_init.redis_init import send_message, waiting_for_message
 
-from settings.paths import APP_TEMP_DIR, NEW_MODELS_PATH
+from settings.paths import NEW_MODELS_PATH
 from modules.btc_core_init.btc_core_manager import get_btc_status, blocks_to_download
 from modules.blockchain_parser.main_parser  import parser
 from modules.redis_init.redis_init import get_redis_status, start_redis_client
@@ -118,24 +116,6 @@ def teach_and_update_models(TEACHING_TEST):
     model_type_data, model_type, model_info, model_dir_file = check_for_new_models() # type: ignore #возврат str (json или prl) и model_info или pkl модели
     teach_model(model_type_data, model_type, model_info, model_dir_file, TEACHING_TEST)
     
-
-def clear_all_temp_directory():
-    if not os.path.exists(APP_TEMP_DIR):
-        # МБ ПЕРЕНЕСТИ В ОТДЕЛЬНОЕ МЕСТО СОЗДАНИЕ ДИРЕКТОРИЙ? (ВРЕМЕННЫХ ТА И ПРОЧИХ)
-        os.makedirs(APP_TEMP_DIR, exist_ok=True)
-        return
-         
-    for filename in os.listdir(APP_TEMP_DIR):
-        file_path = os.path.join(APP_TEMP_DIR, filename)
-        try:
-            if os.path.isfile(file_path) or os.path.islink(file_path):
-                os.remove(file_path)  # Удаление файла или символической ссылки
-                # print(f"Файл удален: {file_path}")
-            elif os.path.isdir(file_path):
-                shutil.rmtree(file_path)  # Рекурсивное удаление директории
-                logger.info(f"Папка удалена: {file_path}")
-        except Exception as e:
-            logger.error(f"Не удалось удалить {file_path}. Причина: {e}")
 
 def start_flask():
     """Запускает Flask-приложение в отдельном потоке"""
@@ -251,23 +231,4 @@ def run_downloaded_from_btc_data_test_scenario(blocks_count: int, seed: int | No
     app_logger_module.log_tracker_run_event(tracker, "run_finished")
     return test_summary
 
-def clear_temp_directory_of_module(module_name):
-    module_temp_dir = os.path.join(APP_TEMP_DIR, module_name)
-    # ОБЬЕДИНИТЬ КАК ТО С КОДОМ СОЗДАНИЯ ДИРЕКТОРИИ ДЛЯ ВРЕМЕННЫХ ФАЙЛЛОВ?
-    # ОТДЕЛЬНАЯ ФУНКЦИЯ ДЛЯ СОХРАНЕНИЯ ФАЙЛОВ И УДАЛЕНИЕМ СТАРЫХ ПЕРЕД СОХР НОВЫХ?
-    # переделать принты на логгер 
-    if not os.path.exists(module_temp_dir):
-        return
-    
-    for filename in os.listdir(module_temp_dir):
-        file_path = os.path.join(module_temp_dir, filename)
-        try:
-            if os.path.isfile(file_path) or os.path.islink(file_path):
-                os.remove(file_path)  # Удаление файла или символической ссылки
-                # print(f"Файл удален: {file_path}")
-            elif os.path.isdir(file_path):
-                shutil.rmtree(file_path)  # Рекурсивное удаление директории
-                logger.info(f"Папка удалена: {file_path}")
-        except Exception as e:
-            logger.error(f"Не удалось удалить {file_path}. Причина: {e}")
 

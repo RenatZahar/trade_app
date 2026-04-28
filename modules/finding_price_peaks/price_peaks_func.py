@@ -162,11 +162,4 @@ def identify_trade_intervals(btc_price_df):
 #         btc = 0
 #     return dollars, sum_avg
 
-def split_btc_prices(btc_price_df, how_much_data_test_after_learning_mounth):
-    last_date = btc_price_df['Human_time'].max()
-    start_date = last_date - pd.DateOffset(months=how_much_data_test_after_learning_mounth)
-    btc_price_df_for_test = btc_price_df[btc_price_df['Human_time'] >= start_date]
-    btc_price_df = btc_price_df[btc_price_df['Human_time'] < start_date]
-
-    return btc_price_df, btc_price_df_for_test
 

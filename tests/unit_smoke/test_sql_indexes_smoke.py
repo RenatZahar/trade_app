@@ -37,3 +37,4 @@ def test_create_indexes_creates_expected_data_table_indexes(tmp_path):
     assert "idx_wallet_id" in index_names
     assert "idx_block_height" in index_names
     assert "idx_txs_blocktime" in index_names
+    assert "idx_block_height_wallet_id" in index_names
