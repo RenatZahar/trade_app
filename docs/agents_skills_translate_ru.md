@@ -2,7 +2,9 @@
 
 Статус: рабочее пояснение для человека.
 
-Этот файл не является активной инструкцией для Codex. Активные правила лежат в корневом `AGENTS.md`, а повторяемые workflow лежат в `.agents/skills/*/SKILL.md`.
+Важно: этот файл предназначен для пользователя. Агент может читать его как пояснительный контекст, но не должен считать его источником обязательных правил, если он расходится с `AGENTS.md` или `.agents/skills/*/SKILL.md`.
+
+Активные правила лежат в корневом `AGENTS.md`, а повторяемые workflow лежат в `.agents/skills/*/SKILL.md`.
 
 ## Что оформлено сейчас
 
@@ -12,6 +14,7 @@
 - `.agents/skills/data-pipeline-safety-check/SKILL.md` - обязательный safety workflow для SQLite, больших данных, индексов и maintenance;
 - `.agents/skills/discuss-plan-execute/SKILL.md` - workflow для крупных, неоднозначных и исследовательских задач;
 - `.agents/skills/review-python-module/SKILL.md` - workflow для ревью Python-кода без правок;
+- `.agents/skills/iteration-workflow/SKILL.md` - workflow для старта, продолжения, закрытия, merge и создания веток итераций;
 - `docs/agents_skills_translate_ru.md` - этот человеческий перевод/rationale.
 
 Старый `docs/AGENTS_demo.md` удален, потому что его роль перешла к настоящему корневому `AGENTS.md`.
@@ -42,6 +45,7 @@
 1. `data-pipeline-safety-check` - главный обязательный skill для опасных данных.
 2. `discuss-plan-execute` - способ не начинать крупную задачу с кода.
 3. `review-python-module` - зафиксирован заранее, чтобы не забыть режим ревью без правок.
+4. `iteration-workflow` - правила работы с `docs/iterations`, ветками итераций, финализацией, merge и созданием следующей ветки.
 
 ### `docs/agents_skills_translate_ru.md`
 
@@ -85,6 +89,30 @@
 
 Пока он не обязан срабатывать постоянно, но теперь он оформлен и не потеряется.
 
+## Зачем `iteration-workflow`
+
+Это skill для жизненного цикла итерации.
+
+Использовать для:
+
+- старта новой итерации;
+- проверки, что предыдущая итерация запушена и слита в `main_branch`;
+- создания ветки вида `feature/iteration-07-module-responsibility-boundaries`;
+- чтения `docs/junior_plus_program.md` и нужного `docs/iterations/iteration_<N>.md`;
+- обновления цели, контекста, DoD и итогов итерации;
+- финализации итерации: tests, commit, push, merge в `main_branch`;
+- создания следующей ветки.
+
+Это не нужно держать целиком в `AGENTS.md`, потому что процесс длинный и нужен не для каждой задачи.
+
+## Актуализация переводов
+
+Файлы `*_translate_ru.md` нужно периодически обновлять после изменений в `AGENTS.md` или `.agents/skills/*/SKILL.md`.
+
+Они не являются источником истины для агента, но должны оставаться понятной человеческой версией текущих правил.
+
+Если активная инструкция и перевод расходятся, правильной считается активная инструкция.
+
 ## Что не включено сейчас
 
 ### `skills-retro`
@@ -111,7 +139,8 @@
 2. Проверить, что `$data-pipeline-safety-check` срабатывает на DB/maintenance запросах.
 3. Проверить, что `$discuss-plan-execute` помогает в крупных задачах и не мешает маленьким.
 4. Использовать `$review-python-module` перед сложными merge/refactor.
-5. После 2-3 реальных ошибок вернуться к идее `skills-retro`.
+5. Использовать `$iteration-workflow` для старта и закрытия итераций.
+6. После 2-3 реальных ошибок вернуться к идее `skills-retro`.
 
 ## Связанные документы
 
@@ -119,6 +148,7 @@
 - `.agents/skills/data-pipeline-safety-check/SKILL.md`
 - `.agents/skills/discuss-plan-execute/SKILL.md`
 - `.agents/skills/review-python-module/SKILL.md`
+- `.agents/skills/iteration-workflow/SKILL.md`
 - `docs/maintenance_guidelines.md`
 - `docs/junior_plus_program.md`
 - `docs/iterations/`

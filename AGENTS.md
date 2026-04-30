@@ -7,6 +7,13 @@
 - Treat `docs/junior_plus_program.md` and `docs/iterations/` as project process and roadmap context.
 - Check `git status` before editing. Never revert or overwrite user changes unless explicitly requested.
 
+## Instruction Priority
+
+- `AGENTS.md` and active `.agents/skills/*/SKILL.md` files define agent behavior.
+- `docs/*_translate_ru.md` files are user-facing explanations and rationale, not primary agent instructions.
+- If a translate file conflicts with `AGENTS.md` or an active skill, follow the active instruction.
+- When active instructions change, update related `*_translate_ru.md` files when practical.
+
 ## Task Modes
 
 - Use a direct patch only for small local tasks: log formatting, argparse details, comments, pure-function tests, or documentation.
@@ -42,6 +49,7 @@
 - Use `$data-pipeline-safety-check` for risky SQLite, bulk data, index, and maintenance tasks.
 - Use `$discuss-plan-execute` for substantial or ambiguous work that should be framed before editing.
 - Use `$review-python-module` when asked to review Python code or patches without editing.
+- Use `$iteration-workflow` when starting, continuing, closing, merging, or creating a project iteration.
 - Do not let a meta-skill or retrospective rewrite project instructions automatically. Propose instruction changes and wait for explicit confirmation.
 
 ## Validation

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Iteration Workflow"
+  short_description: "Manage project iteration lifecycle"
+  default_prompt: "Use $iteration-workflow when starting, continuing, closing, merging, or creating a project iteration."
