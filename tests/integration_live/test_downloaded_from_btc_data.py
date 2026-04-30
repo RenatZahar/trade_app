@@ -577,7 +577,6 @@ def run_downloaded_from_btc_data_test(blocks_count: int, seed: int | None = None
     implementation step; for now this function gives `main.py` a typed,
     loggable integration-test entrypoint with explicit parameters.
     """
-    random.seed(seed)
     summary = {
         "test_name": "test_downloaded_from_btc_data",
         "seed": seed,
@@ -601,7 +600,7 @@ def run_downloaded_from_btc_data_test(blocks_count: int, seed: int | None = None
     if blocks_count > len(blocks_list):
         raise RuntimeError("blocks_list для проверки больше чем blocks_count")
 
-    requested_blocks = random.sample(blocks_list, blocks_count)
+    requested_blocks = random.Random(seed).sample(blocks_list, blocks_count)
     summary["requested_blocks"] = requested_blocks
     blocks_sql_data = canonicalize_sql_data_for_compare(get_sql_data_for_blocks(requested_blocks))
     summary["sql_rows_count"] = len(blocks_sql_data)

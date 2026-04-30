@@ -4,10 +4,12 @@ import pandas as pd
 import gc
 from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor, as_completed
-import random
 
 import modules.logger.logger as app_logger_module
+from modules.logger.experiment_metadata import summarize_grid_metadata
 from modules.logger.run_tracker import get_current_run_tracker
+from modules.logger.runtime_bootstrap import update_runtime_metadata
+from .determinism import sample_fraction
 from settings.paths import NEW_PARAM_GRID_DIR, PARAM_GRID_DIR, PARAM_GRID_RESULTS
 from settings.paths import BLOCKS_SQL_DATA
 from . import service_funcs as sf
@@ -21,7 +23,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 
 os.chdir(script_dir)
 
-def main_processing_model_orchestra(model, TEST):
+def main_processing_model_orchestra(model, TEST, seed=None):
     tracker = get_current_run_tracker()
 
     # ДОБАВИТЬ В ПАРАМЕТРЫ МОДЕЛИ ПАРАМЕТРЫ ЗАТУХАНИЯ ДЛЯ ТЕСТА В ПАРАМ ГРИД. ПЕРЕДЕЛАТЬ ФУНКЦИЮ ТЕСТИРОВАНИЯ ПАРАМ ГРИДА ПОД РАЗНЫЕ
@@ -49,7 +51,7 @@ def main_processing_model_orchestra(model, TEST):
             if tracker:
                 stage_data = tracker.start_stage('features.correlation_data')
                 app_logger_module.log_tracker_stage_started(tracker, stage_data)
-            cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test  = do.get_corelation_by_tmsp_df(TEST, filter_params, correlation_type, tmps, chunk_size)
+            cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test  = do.get_corelation_by_tmsp_df(TEST, filter_params, correlation_type, tmps, chunk_size, seed=seed)
             cor_data_in_iteration_to_teach = do.clean_data(cor_data_in_iteration_to_teach)
         
             if cor_data_in_iteration_to_profit_test.empty:
@@ -69,7 +71,7 @@ def main_processing_model_orchestra(model, TEST):
             if tracker:
                 stage_data = tracker.start_stage('train.model_fit')
                 app_logger_module.log_tracker_stage_started(tracker, stage_data)
-            model.train_model_specific(cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test)
+            model.train_model_specific(cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test, seed=seed)
             if tracker:
                 stage_data = tracker.finish_stage('success', details=f'iteration={iteration}')
                 app_logger_module.log_tracker_stage_finished(tracker, stage_data)
@@ -97,9 +99,13 @@ def main_processing_model_orchestra(model, TEST):
                 stage_data = tracker.finish_stage('error', details=f'iteration={iteration} error={e}')
                 app_logger_module.log_tracker_stage_finished(tracker, stage_data)
             raise
-def teaching_with_param_grid_orchestrator(TEACHING_TEST):
+def teaching_with_param_grid_orchestrator(TEACHING_TEST, seed=None):
     warn_required_data_table_indexes(BLOCKS_SQL_DATA, "param_grid.correlation_pipeline")
     time_grid_params, grid_params = sf.check_for_new_param_grid()
+    update_runtime_metadata(
+        get_current_run_tracker(),
+        grid_params=summarize_grid_metadata(time_grid_params, grid_params),
+    )
     models_statistic_result_df = pd.DataFrame()
     if not grid_params:
         raise RuntimeError("Param grid orchestration started without parameter combinations.")
@@ -130,7 +136,7 @@ def teaching_with_param_grid_orchestrator(TEACHING_TEST):
 
     if TEACHING_TEST:
         for i, group in enumerate(grids_grouped_by_corr_type):
-                grids_grouped_by_corr_type[i] = random.sample(group, int(len(group)*TEACHING_TEST))
+                grids_grouped_by_corr_type[i] = sample_fraction(group, TEACHING_TEST, seed=seed)
 
     for group_of_grid in grids_grouped_by_corr_type:
         if not group_of_grid:
@@ -144,7 +150,7 @@ def teaching_with_param_grid_orchestrator(TEACHING_TEST):
             cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test = existing_data
             logger.info("Используем сохранённые корреляционные данные.")
         else:
-            cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test  = do.get_corelation_by_tmsp_df(TEACHING_TEST, filter_params, correlation_type, tmps, chunk_size)
+            cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test  = do.get_corelation_by_tmsp_df(TEACHING_TEST, filter_params, correlation_type, tmps, chunk_size, seed=seed)
             cor_data_in_iteration_to_teach = do.clean_data(cor_data_in_iteration_to_teach)
             cor_data_in_iteration_to_profit_test = do.clean_data(cor_data_in_iteration_to_profit_test)
             os.makedirs(PARAM_GRID_RESULTS, exist_ok=True)
@@ -160,7 +166,8 @@ def teaching_with_param_grid_orchestrator(TEACHING_TEST):
                     train_model_for_param, 
                     param, 
                     cor_data_in_iteration_to_teach, 
-                    cor_data_in_iteration_to_profit_test
+                    cor_data_in_iteration_to_profit_test,
+                    seed
                 ))
             for future in as_completed(futures):
                 try:
@@ -225,29 +232,29 @@ def load_existing_correlation_data(tmps, results_dir):
 
 
 
-def train_model_for_param(param, cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test):
+def train_model_for_param(param, cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test, seed=None):
     model_type = param['model']['type']
     if model_type == 'ElasticNet':
         model = mc.ElasticNetModel(param)
     else:
         raise ValueError(f"Модель типа {model_type} не поддерживается.")
-    return model.train_model_specific(cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test, return_=True)
+    return model.train_model_specific(cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test, return_=True, seed=seed)
 
-def teach_model(model_type_data, model_type, model_info, model_dir_file, TEACHING_TEST):
+def teach_model(model_type_data, model_type, model_info, model_dir_file, TEACHING_TEST, seed=None):
     if 'json' in model_type_data:
         logger.info("Найден новый json модели")
-        teach_model_from_json(model_type, model_info, model_dir_file, TEACHING_TEST)
+        teach_model_from_json(model_type, model_info, model_dir_file, TEACHING_TEST, seed=seed)
     elif 'pkl' in model_type_data:
         logger.info("Найден новый pkl модели") 
         logger.error('Код для использования модели PKL еще не написан. Надо сохранять параметры в папку teached models если буду использовать pkl')
         raise NotImplementedError("PKL model teaching flow is not implemented yet.")
 
-def teach_model_from_json(model_type, model_info, init_dir_file, TEACHING_TEST):
+def teach_model_from_json(model_type, model_info, init_dir_file, TEACHING_TEST, seed=None):
     if model_type == 'ElasticNet':
         model = mc.ElasticNetModel(model_info)
     else:
         raise ValueError(f"Модель типа {model_type} не поддерживается.")
     model.init_dir_file = init_dir_file
-    main_processing_model_orchestra(model, TEACHING_TEST)
+    main_processing_model_orchestra(model, TEACHING_TEST, seed=seed)
 
 

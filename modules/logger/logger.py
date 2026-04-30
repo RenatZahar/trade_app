@@ -1,6 +1,7 @@
 # logger.py
 
 import logging
+import json
 import queue
 import sys
 from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
@@ -83,6 +84,16 @@ def log_tracker_run_event(tracker, event, details=None, level=logging.INFO):
         message += f" details={details}"
 
     logger.log(level, message)
+
+
+def log_tracker_metadata(tracker, level=logging.INFO):
+    logger = logging.getLogger(APP_LOGGER_NAME)
+    tracker_data = tracker.get_run_data()
+    metadata = json.dumps(tracker_data.get("metadata", {}), ensure_ascii=False, default=str)
+    logger.log(
+        level,
+        f"_TRACKER_INFO event=run_metadata run_id={tracker.id} metadata={metadata}",
+    )
 
 def log_tracker_stage_started(tracker, stage_data):
     logger = logging.getLogger(APP_LOGGER_NAME)

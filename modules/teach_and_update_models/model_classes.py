@@ -30,6 +30,7 @@ from settings.paths import BLOCK_HEIGHT_BLOCK_TIME_MAP_DIR_FILE, BLOCKS_SQL_DATA
 
 from . import service_funcs as sf
 from . import data_operations as do
+from .determinism import model_params_with_seed
 
 import logging
 logger = logging.getLogger("app")
@@ -52,7 +53,7 @@ class GeneralModel():
         self.end_teaching_tmsp = None
         self.tmsps_data = None
 
-    def train_model_specific(self, cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test):
+    def train_model_specific(self, cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test, seed=None):
         """
         Абстрактный метод для специфической тренировки модели.
         Должен быть реализован в подклассе.
@@ -188,7 +189,7 @@ class GeneralModel():
         return total_final_value
 
 class ElasticNetModel(GeneralModel):
-    def train_model_specific(self, cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test, n_splits=5, return_ = False):
+    def train_model_specific(self, cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test, n_splits=5, return_ = False, seed=None):
         from sklearn.linear_model import ElasticNet
         from sklearn.model_selection import StratifiedKFold
         # logger.info("Start train_model_specific")
@@ -226,6 +227,7 @@ class ElasticNetModel(GeneralModel):
                 X_train, X_test = X.iloc[train_index], X.iloc[test_index]
                 y_train, y_test = y.iloc[train_index], y.iloc[test_index]
                 filtered_params = {key: value for key, value in self.model_parameters.items() if key != 'decision_threshold'}
+                filtered_params = model_params_with_seed(filtered_params, seed=seed)
                 
                 model.set_params(**filtered_params)
                 with warnings.catch_warnings(record=True) as w:
@@ -255,6 +257,7 @@ class ElasticNetModel(GeneralModel):
             y_train, y_test = y, y
             # Выполняем одну итерацию обучения
             filtered_params = {key: value for key, value in self.model_parameters.items() if key != 'decision_threshold'}
+            filtered_params = model_params_with_seed(filtered_params, seed=seed)
             model.set_params(**filtered_params)
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("always")

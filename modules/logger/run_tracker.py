@@ -33,11 +33,12 @@ def get_arg(args):
     return starting_arg
         
 class RunTracker():
-    def __init__(self, args):
+    def __init__(self, args, metadata=None):
         global CURRENT_RUN_TRACKER
         self.id = get_init_number()
         self.start_arg = get_arg(args)
         self.args_dict = vars(args)
+        self.metadata = metadata or {}
 
         self.started_at_dt = datetime.now()
         self.started_at = self.started_at_dt.strftime("%Y-%m-%d %H:%M:%S")
@@ -71,7 +72,11 @@ class RunTracker():
             'current_stage': self.current_stage,
             'current_stage_started_at': self.current_stage_started_at,
             'stages': self.stages,
+            'metadata': self.metadata,
         }
+
+    def set_metadata(self, metadata):
+        self.metadata = metadata or {}
 
     def get_duration_data(self, start_perf_counter):
         elapsed = time.perf_counter() - start_perf_counter

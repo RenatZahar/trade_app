@@ -1615,6 +1615,10 @@ def warn_required_data_table_indexes(db_path, scenario_name=None):
 def create_indexes(db_path):
     # поддерживаем индексы только в рабочей таблице data_table;
     # few_tx_wallets — хранилищная таблица, индексы на ней не требуются.
+    logger.info(
+        "start create_indexes: создаем обязательные индексы data_table "
+        "(idx_wallet_id, idx_block_height, idx_txs_blocktime, idx_block_height_wallet_id)."
+    )
     conn = None
     cursor = None
     try:

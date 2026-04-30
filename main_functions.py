@@ -23,6 +23,13 @@ parser_running = False
 parser_lock = threading.Lock()
 
 
+def warn_data_table_indexes_for_scenario(scenario_name: str) -> None:
+    from modules.sql_funcs.moving_txs import warn_required_data_table_indexes
+    from settings.paths import BLOCKS_SQL_DATA
+
+    warn_required_data_table_indexes(BLOCKS_SQL_DATA, scenario_name)
+
+
 # в некоторых случаях парсер отправляет такое сообщение.
 #         send_message('parser_status', 'completed with error')
 # пока не реализовал перезапуск парсера от этого сообзщения с задержкой
@@ -108,13 +115,19 @@ def run_parser_asyncio():
             parser_running = False
 
 
-def teach_and_update_models(TEACHING_TEST):
+def teach_and_update_models(TEACHING_TEST, seed=None):
     from modules.teach_and_update_models.service_funcs import check_for_new_models
     from modules.teach_and_update_models.orchestrator import teach_model
+    from modules.logger.experiment_metadata import summarize_model_metadata
+    from modules.logger.runtime_bootstrap import update_runtime_metadata
 
     resave_json_with_indend()
     model_type_data, model_type, model_info, model_dir_file = check_for_new_models() # type: ignore #возврат str (json или prl) и model_info или pkl модели
-    teach_model(model_type_data, model_type, model_info, model_dir_file, TEACHING_TEST)
+    update_runtime_metadata(
+        get_current_run_tracker(),
+        model_params=summarize_model_metadata(model_type_data, model_type, model_info, model_dir_file),
+    )
+    teach_model(model_type_data, model_type, model_info, model_dir_file, TEACHING_TEST, seed=seed)
     
 
 def start_flask():
@@ -156,10 +169,10 @@ def resave_json_with_indend():
             with open(full_dir_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4, ensure_ascii=False)
 
-def test_param_grid(TEACHING_TEST):
+def test_param_grid(TEACHING_TEST, seed=None):
     from modules.teach_and_update_models.orchestrator import teaching_with_param_grid_orchestrator
 
-    teaching_with_param_grid_orchestrator(TEACHING_TEST)
+    teaching_with_param_grid_orchestrator(TEACHING_TEST, seed=seed)
 
 
 def format_downloaded_from_btc_stage_details(test_summary: dict) -> str:
