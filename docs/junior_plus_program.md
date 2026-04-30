@@ -298,10 +298,10 @@
 - `1 - Reproducible run: done`
 - `2 - Config validation: done`
 - `3 - Logging and observability: done (остаточная шлифовка parser lifecycle перенесена в модульные задачи)`
-- `4 - Errors and contracts: in progress`
-- `5 - Testing foundation: planned`
-- `6 - Determinism and experiment control: planned`
-- `7 - Module responsibility boundaries: planned`
+- `4 - Errors and contracts: done`
+- `5 - Testing foundation: done`
+- `6 - Determinism and experiment control: done`
+- `7 - Module responsibility boundaries: started`
 - `8 - Minimal quality gate in CI: planned`
 - `9 - Agentic-ready contours: planned`
 - `10 - Portfolio packaging: planned`
