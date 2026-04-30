@@ -35,14 +35,9 @@
 
 ## Experiment Protocol
 
-- Mark temporary experiment entities clearly:
-  - files or folders: `experimental*` or `experimental/`;
-  - functions: `_experimental` suffix;
-  - tables: `experimental_` prefix;
-  - CLI flags: clear experimental wording.
-- Keep competing experimental code out of production flow until the result is chosen.
-- For each experiment, record goal, hypothesis, affected modules/tables/indexes, input size, command, timing, correctness checks, support cost, and final decision.
-- After choosing an approach, move only the winning path into production, remove obsolete experimental code, and update docs.
+- Use `$experiment-protocol` when designing, running, comparing, documenting, or cleaning up experimental code, data layouts, competing pipelines, performance hypotheses, or architecture alternatives.
+- Store experiment decision records under `docs/experiments/`.
+- If an experiment touches SQLite, large data, indexes, maintenance scripts, or long-running DB work, also use `$data-pipeline-safety-check` and wait for the user to choose a safe option before mutation.
 
 ## Skills
 
@@ -50,6 +45,7 @@
 - Use `$discuss-plan-execute` for substantial or ambiguous work that should be framed before editing.
 - Use `$review-python-module` when asked to review Python code or patches without editing.
 - Use `$iteration-workflow` when starting, continuing, closing, merging, or creating a project iteration.
+- Use `$experiment-protocol` when working with experiments, competing approaches, temporary experimental code, or performance hypotheses.
 - Do not let a meta-skill or retrospective rewrite project instructions automatically. Propose instruction changes and wait for explicit confirmation.
 
 ## Validation

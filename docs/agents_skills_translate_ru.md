@@ -15,6 +15,8 @@
 - `.agents/skills/discuss-plan-execute/SKILL.md` - workflow для крупных, неоднозначных и исследовательских задач;
 - `.agents/skills/review-python-module/SKILL.md` - workflow для ревью Python-кода без правок;
 - `.agents/skills/iteration-workflow/SKILL.md` - workflow для старта, продолжения, закрытия, merge и создания веток итераций;
+- `.agents/skills/experiment-protocol/SKILL.md` - workflow для планирования, сравнения, документирования и уборки экспериментов;
+- `docs/experiments/experiment_record_template.md` - шаблон decision record для эксперимента;
 - `docs/agents_skills_translate_ru.md` - этот человеческий перевод/rationale.
 
 Старый `docs/AGENTS_demo.md` удален, потому что его роль перешла к настоящему корневому `AGENTS.md`.
@@ -46,6 +48,7 @@
 2. `discuss-plan-execute` - способ не начинать крупную задачу с кода.
 3. `review-python-module` - зафиксирован заранее, чтобы не забыть режим ревью без правок.
 4. `iteration-workflow` - правила работы с `docs/iterations`, ветками итераций, финализацией, merge и созданием следующей ветки.
+5. `experiment-protocol` - правила изоляции, измерения, сравнения, фиксации решения и уборки experimental-кода.
 
 ### `docs/agents_skills_translate_ru.md`
 
@@ -105,6 +108,24 @@
 
 Это не нужно держать целиком в `AGENTS.md`, потому что процесс длинный и нужен не для каждой задачи.
 
+## Зачем `experiment-protocol`
+
+Это skill для экспериментов: временный код, альтернативные пайплайны, performance-гипотезы, временные таблицы, сравнение архитектурных подходов.
+
+Он развивает исходный протокол экспериментов и добавляет недостающие guardrails:
+
+- baseline до изменений;
+- заранее заданные go/no-go критерии;
+- rollback/recovery plan;
+- запрет смешивать behavior changes и performance changes без явного решения;
+- data scale tiers: tiny, medium, full/live;
+- cleanup gate;
+- decision record.
+
+Результаты экспериментов нужно фиксировать в отдельных файлах под `docs/experiments/`, а не только в тексте чата или итерации.
+
+Если эксперимент затрагивает SQLite, большие данные, индексы или maintenance, `experiment-protocol` должен подключать `data-pipeline-safety-check`.
+
 ## Актуализация переводов
 
 Файлы `*_translate_ru.md` нужно периодически обновлять после изменений в `AGENTS.md` или `.agents/skills/*/SKILL.md`.
@@ -140,7 +161,8 @@
 3. Проверить, что `$discuss-plan-execute` помогает в крупных задачах и не мешает маленьким.
 4. Использовать `$review-python-module` перед сложными merge/refactor.
 5. Использовать `$iteration-workflow` для старта и закрытия итераций.
-6. После 2-3 реальных ошибок вернуться к идее `skills-retro`.
+6. Использовать `$experiment-protocol` для экспериментального кода, performance-гипотез и конкурирующих подходов.
+7. После 2-3 реальных ошибок вернуться к идее `skills-retro`.
 
 ## Связанные документы
 
@@ -149,6 +171,8 @@
 - `.agents/skills/discuss-plan-execute/SKILL.md`
 - `.agents/skills/review-python-module/SKILL.md`
 - `.agents/skills/iteration-workflow/SKILL.md`
+- `.agents/skills/experiment-protocol/SKILL.md`
+- `docs/experiments/experiment_record_template.md`
 - `docs/maintenance_guidelines.md`
 - `docs/junior_plus_program.md`
 - `docs/iterations/`
