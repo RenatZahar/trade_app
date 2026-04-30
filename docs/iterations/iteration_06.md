@@ -242,11 +242,12 @@ SQL. Такой тест проверяет не "не упал ли весь pi
   tracker metadata и CLI contracts.
 - проведена исследовательская работа по Codex `AGENTS.md`, skills и
   workflow-дисциплине агента;
-- сырой материал по agents/skills систематизирован в два документа:
-  - `docs/AGENTS_demo.md` - будущий рабочий протокол агента для проекта;
-  - `docs/agents_skills_demo.md` - исследовательская записка по `AGENTS.md`,
+- сырой материал по agents/skills подготовлен к переносу в рабочие артефакты:
+  - корневой `AGENTS.md` как будущий рабочий протокол агента для проекта;
+  - `docs/agents_skills_translate_ru.md` как русское пояснение по `AGENTS.md`,
     skills, subagents, MCP, GSD/Superpowers/OpenSpec/meta-skill и плану
     внедрения;
+  - `.agents/skills/*` как место для repo-scoped skills;
 - зафиксирован практический вывод: начинать с короткого корневого `AGENTS.md`,
   затем добавить 2-3 repo-scoped skills, а meta-skill использовать только как
   ручную ретроспективу с подтверждением пользователя.

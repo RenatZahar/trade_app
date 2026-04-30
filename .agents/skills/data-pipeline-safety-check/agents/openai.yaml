@@ -1,0 +1,4 @@
+interface:
+  display_name: "Data Pipeline Safety"
+  short_description: "Preflight risky data maintenance"
+  default_prompt: "Use $data-pipeline-safety-check before changing SQLite, bulk data, indexes, or maintenance scripts."
