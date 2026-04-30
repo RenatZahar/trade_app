@@ -25,6 +25,3 @@ TXS_PER_WALLET_MORE_THAN = LOW_TX_WALLET_MAX_TX_COUNT
 # соответствуют разные строки из-за различий по Wallet_id, n и Amount, поэтому
 # любые delete/update/merge по одному Transaction_id потенциально небезопасны.
 SQL_LIMIT_BATCH_SIZE =  min(int(_max_sql_vars()*0.9), 5000) # возможная точка для оптимизации (900 для SQL_IN_LIST_MAX — для размера IN (?,…,?) и SQL_EXECUTEMANY_BATCH — для «строк на коммит» в executemany (можно держать больше, чем IN))
-SQL_RETURN_BATCH_SIZE = 50000  # Батч для обычного sql-to-sql возврата few_tx_wallets -> data_table.
-SQL_MOVE_TXS_BATCH_ROWS = 1_000_000  # Целевой размер батча move_txs в строках; фактический батч режется по кошелькам.
-SQL_MOVE_TXS_BACK_BATCH_ROWS = 1_000_000  # Крупный батч для maintenance-возврата few_tx_wallets -> data_table.

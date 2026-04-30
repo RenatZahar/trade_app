@@ -15,7 +15,7 @@ from settings.paths import BLOCKS_SQL_DATA
 from . import service_funcs as sf
 from . import data_operations as do
 from . import model_classes as mc
-from modules.sql_funcs.moving_txs import warn_required_data_table_indexes
+from modules.sql_funcs.data_table_indexes import warn_required_data_table_indexes
  
 import logging
 logger = logging.getLogger("app")

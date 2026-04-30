@@ -3,22 +3,21 @@ import argparse
 
 EPILOG = (
     "Runtime commands:\n"
-    "  main-pipeline - Flask + updater + peaks + training\n"
+    "  main-pipeline - Flask + updater + peaks + train a new model\n"
     "  param-grid    - запуск подбора параметров\n"
     "\n"
     "Integration live tests:\n"
-    "  test_downloaded_from_btc_data - сравнение SQL-данных с повторной реконструкцией из BTC RPC\n"
+    "  test downloaded-from-btc-data <blocks_count> [seed] - сравнение SQL-данных с повторной реконструкцией из BTC RPC\n"
 )
 
 
 def validate_cli_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     active_top_level_modes = [
         args.start_parser,
-        args.service is not None,
         args.command is not None,
     ]
     if sum(active_top_level_modes) == 0:
-        parser.error("Choose one scenario: --start_parser, --service, or test ...")
+        parser.error("Choose one scenario: --start_parser or a runtime command")
     if sum(active_top_level_modes) > 1:
         parser.error("Use only one top-level scenario at a time")
 
@@ -37,18 +36,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument("-p", "--start_parser", action="store_true", help="Старт парсера блокчейна")
-    parser.add_argument(
-        "-s",
-        "--service",
-        choices=["move_txs", "move_txs_back"],
-        help="Сервисные функции",
-    )
 
     scenario_subparsers = parser.add_subparsers(dest="command")
 
     main_pipeline_parser = scenario_subparsers.add_parser(
         "main-pipeline",
-        help="Запустить основной pipeline: Flask + updater + peaks + training",
+        help="Запустить price updater, подготовку peaks и обучение новой модели",
     )
 
     param_grid_parser = scenario_subparsers.add_parser(

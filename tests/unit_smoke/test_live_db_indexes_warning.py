@@ -2,7 +2,7 @@ import sqlite3
 import warnings
 from pathlib import Path
 
-from modules.sql_funcs.moving_txs import REQUIRED_DATA_TABLE_INDEXES
+from modules.sql_funcs.data_table_indexes import REQUIRED_DATA_TABLE_INDEXES
 from settings.paths import BLOCKS_SQL_DATA
 
 

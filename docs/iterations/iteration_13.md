@@ -185,6 +185,131 @@ Planned
 
 Дополнительный вопрос: имеет ли смысл создавать таблицу не только со сводными данными по кошелькам, но и держать там список tmps где есть их транзакции?
 
+### 7. Аудит старых сценариев запуска из `main.py`
+
+После `iteration_06` и `iteration_07` `main.py` сильно очищен. На текущий
+момент в рабочем entrypoint осталось 4 сценария:
+
+- `main-pipeline` - price updater + подготовка peaks + обучение новой модели;
+- `param-grid` - подбор параметров модели;
+- `--start_parser` - запуск BTC/parser monitor flow;
+- `test downloaded-from-btc-data` - integration-live проверка SQL/BTC
+  consistency.
+
+В старых версиях `main.py` существовало больше сценариев и debug/test-веток.
+При разборе iteration 13 нужно пройтись по ним и для каждого принять решение:
+вернуть как нормальный CLI/runtime сценарий, перенести в `scripts/debug` /
+`integration_live`, или окончательно удалить как устаревший код.
+
+Исторические сценарии:
+
+- default startup самого раннего `main.py`: price updater + BTC core monitor +
+  blockchain parser + sleep-loop;
+- `--start_parser` / `run_parser` - запуск blockchain parser flow;
+- `flask` / `FLASK_TEST` - запуск только Flask;
+- `main_pipeline` / `MAIN_TEST` - старый тестовый запуск Flask + updater +
+  peaks + training с `TEACHING_TEST=1`;
+- `param_grid` / `PARAM_GRID_TESTING` - старый тестовый запуск param-grid;
+- `converge_elasticnet` / `TESTS_FROM_MODULES` - debug-проверка сходимости
+  ElasticNet;
+- `right_now_test` - запуск parser "прямо сейчас" через
+  `run_parser_now_and_wait`;
+- `test downloaded-from-btc-data` - integration-live data consistency test;
+- `move_txs` - legacy physical split `data_table -> few_tx_wallets`;
+- `return_few_tx_wallets` - старый частичный возврат `few_tx_wallets ->
+  data_table`;
+- `move_txs_back` - финальный возврат всех строк в `data_table` с cleanup /
+  indexes / optional `VACUUM` / `ANALYZE`.
+
+Предварительное решение по известным пунктам:
+
+- `move_txs`, `return_few_tx_wallets`, `move_txs_back` не возвращать в рабочий
+  CLI: physical split признан слабо жизнеспособным подходом и архивирован в
+  `docs/experiments/moving_txs_physical_split/`;
+- `test downloaded-from-btc-data` оставить как integration-live сценарий, но
+  держать отдельно от обычного unit/smoke контура;
+- `converge_elasticnet` и `right_now_test` проверить на актуальность: если они
+  нужны, оформить как debug/integration scripts с явными входами и expected
+  output; если нет - удалить;
+- `flask`, старый `main_pipeline` и старый `param_grid` сравнить с текущими
+  `main-pipeline` / `param-grid` и не возвращать дубли, если поведение уже
+  покрыто текущими командами;
+- отдельно решить статус текущего `main-pipeline`: это постоянный production
+  process или исследовательская заготовка для обучения новой модели. Сейчас
+  временные окна берутся из `model.time_params`, а не из аргументов команды.
+
+Ожидаемый артефакт:
+
+- таблица решений по каждому старому сценарию: `keep`, `restore`, `move to
+  debug`, `move to integration_live`, `delete`;
+- ссылки на фактические файлы/коммиты, где сценарий жил;
+- обновленный README/CLI help, где перечислены только поддерживаемые сценарии.
+
+### 8. Ревизия technical debt comments из `runtime_scenarios.py`
+
+Во время `iteration_07` `main_functions.py` переименован в
+`runtime_scenarios.py`, и из рабочего файла убраны старые
+закомментированные заметки. Их нужно не терять, а проверить в будущей
+технической итерации: какие еще актуальны, какие стоит оформить задачами, а
+какие удалить окончательно как устаревшие.
+
+Перенесенные вопросы:
+
+- Parser restart after error:
+  - старый комментарий: в некоторых случаях parser отправляет
+    `send_message('parser_status', 'completed with error')`;
+  - source context: исходная заметка была в pre-rename
+    `main_functions.py:33-35`, текущее место поведения -
+    [parser_runtime.py](I:/projects/trade_app_project/modules/blockchain_parser/parser_runtime.py:89);
+  - не был реализован перезапуск parser после этого сообщения с задержкой;
+  - нужно решить, нужен ли auto-restart parser flow, или достаточно текущего
+    fail-fast/logging поведения.
+- `parser_status` listener:
+  - старый commented-out код:
+    `waiting_for_message('parser_status', start_blockchain_parser)`;
+  - source context: исходная заметка была в pre-rename
+    `main_functions.py:38`, текущий active listener -
+    [parser_runtime.py](I:/projects/trade_app_project/modules/blockchain_parser/parser_runtime.py:39);
+  - нужно решить, должен ли parser lifecycle слушать отдельный status-channel
+    или текущий `check_btc_core_status_line` достаточен.
+- Thread lifecycle policy:
+  - старая заметка: daemon-потоки завершаются вместе с программой, non-daemon
+    потоки заставляют программу дождаться завершения;
+  - source context: исходная заметка была в pre-rename
+    `main_functions.py:39-41`, текущие daemon-потоки - BTC monitor
+    [parser_runtime.py](I:/projects/trade_app_project/modules/blockchain_parser/parser_runtime.py:41)
+    и Flask [flask_runtime.py](I:/projects/trade_app_project/modules/flask_module/flask_runtime.py:24);
+  - нужно явно описать policy для Flask, BTC monitor, parser и потенциальных
+    save/cleanup операций.
+- BTC price updater threading:
+  - старое решение: `clean_raw_data()` запускался не в отдельном потоке, чтобы
+    peaks корректно отработали;
+  - рядом был commented-out вариант через daemon thread;
+  - source context: исходная заметка была в pre-rename
+    `main_functions.py:57-60`, текущий синхронный вызов -
+    [runtime_scenarios.py](I:/projects/trade_app_project/runtime_scenarios.py:23),
+    wrapper вокруг `clean_raw_data()` -
+    [runtime.py](I:/projects/trade_app_project/modules/bts_price_updater/runtime.py:4);
+  - нужно решить, должен ли price update оставаться синхронным шагом
+    `main-pipeline`, или его можно безопасно вынести в отдельный lifecycle.
+- Redis startup shape:
+  - старая заметка рядом с `if not start_redis()`: "не нравится конструкция,
+    переписать";
+  - source context: исходная заметка была в pre-rename
+    `main_functions.py:64`, текущий contract функции -
+    [parser_runtime.py](I:/projects/trade_app_project/modules/blockchain_parser/parser_runtime.py:24),
+    текущий call site - [parser_runtime.py](I:/projects/trade_app_project/modules/blockchain_parser/parser_runtime.py:37);
+  - нужно решить, оставить boolean-return contract, заменить на fail-fast
+    exception внутри `start_redis()`, или выделить отдельный startup/check
+    объект.
+
+Ожидаемый артефакт:
+
+- короткое решение по каждому пункту: `keep as is`, `implement`, `delete`,
+  `move to docs`;
+- если пункт остается актуальным - отдельная задача с тестируемым критерием;
+- если нет - удалить остаточные comments/legacy hooks из кода.
+
 ## Почему это отложено
 
 - Сейчас в приоритете техническая стабилизация проекта:

@@ -1,6 +1,6 @@
 import sqlite3
 
-from modules.sql_funcs.moving_txs import create_indexes
+from modules.sql_funcs.data_table_indexes import create_indexes
 
 
 def test_create_indexes_creates_expected_data_table_indexes(tmp_path):
