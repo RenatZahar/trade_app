@@ -1,15 +1,10 @@
 import logging
 import sqlite3
 
+from settings.db_contracts import REQUIRED_DATA_TABLE_INDEXES
+
 
 logger = logging.getLogger("app")
-
-REQUIRED_DATA_TABLE_INDEXES = {
-    "idx_wallet_id",
-    "idx_block_height",
-    "idx_txs_blocktime",
-    "idx_block_height_wallet_id",
-}
 
 
 def get_data_table_indexes(db_path):

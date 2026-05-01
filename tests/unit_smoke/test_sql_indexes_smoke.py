@@ -1,6 +1,9 @@
 import sqlite3
 
-from modules.sql_funcs.data_table_indexes import create_indexes
+from modules.sql_funcs.data_table_indexes import (
+    REQUIRED_DATA_TABLE_INDEXES,
+    create_indexes,
+)
 
 
 def test_create_indexes_creates_expected_data_table_indexes(tmp_path):
@@ -34,7 +37,4 @@ def test_create_indexes_creates_expected_data_table_indexes(tmp_path):
 
     index_names = {row[0] for row in rows}
 
-    assert "idx_wallet_id" in index_names
-    assert "idx_block_height" in index_names
-    assert "idx_txs_blocktime" in index_names
-    assert "idx_block_height_wallet_id" in index_names
+    assert REQUIRED_DATA_TABLE_INDEXES <= index_names
