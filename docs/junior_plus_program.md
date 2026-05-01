@@ -304,7 +304,7 @@
 - `5 - Testing foundation: done`
 - `6 - Determinism and experiment control: done`
 - `7 - Module responsibility boundaries: done`
-- `8 - Minimal quality gate in CI: started`
+- `8 - Minimal quality gate in CI: done`
 - `9 - Agentic-ready contours: planned`
 - `10 - Portfolio packaging: planned`
 - `11 - Notes and docs hygiene: planned`

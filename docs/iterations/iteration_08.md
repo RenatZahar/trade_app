@@ -12,7 +12,7 @@ Junior+ умеет предотвращать очевидные регресс�
 
 ## Статус
 
-Started
+Done
 
 ## Контекст старта
 
@@ -179,10 +179,54 @@ Started
     run: python -m pytest tests/unit_smoke -q
   ```
 
+## Итог
+
+- Добавлен минимальный GitHub Actions workflow:
+  `.github/workflows/quality-gate.yml`.
+- Обязательный gate запускает:
+  `python -m pytest tests/unit_smoke -q`.
+- Workflow использует `windows-latest` и Python 3.12, потому что текущий
+  `requirements.lock.txt` отражает активное Windows/Python 3.12 окружение.
+- Добавлен единый runtime contract:
+  `settings/runtime_contracts.py`.
+- `.env` остается источником значений локального окружения, `.env.example`
+  документирует ожидаемые ключи, а runtime contract описывает правила
+  зависимостей сценариев.
+- Добавлены smoke-проверки:
+  - env/config contract;
+  - scenario preflight до долгой работы;
+  - CLI-сценарии из argparse;
+  - mapping CLI-сценариев в runtime-сценарии.
+- Добавлен скрипт обновления dependency lock:
+  `scripts/update_requirements_lock.py`.
+- `requirements.lock.txt` перегенерирован из активного Python 3.12 окружения.
+  Конфликтующий `dask-expr==1.0.14` исключен из lock, потому что он требует
+  другой `dask`, а проект напрямую использует `dask`/`distributed`.
+
+## Проверки
+
+- Локально:
+  `python -m pytest tests\unit_smoke -q` -> `52 passed, 1 warning`.
+- Локально:
+  `python scripts\update_requirements_lock.py --allow-system --check` -> pass.
+- Локально:
+  `python -m pip install --dry-run -r requirements.lock.txt` -> pass.
+- GitHub Actions:
+  `Quality Gate / Smoke/unit tests` -> success,
+  <https://github.com/RenatZahar/trade_app/actions/runs/25221571819>.
+
+## Known warnings
+
+- pandas `DataFrameGroupBy.apply` deprecation warning в
+  `modules/teach_and_update_models/data_operations.py`.
+- В чистом CI checkout два legacy contract tests могут быть skipped, если
+  `modules/teach_and_update_models/data_operations.py` отсутствует, потому что
+  этот файл сейчас игнорируется `.gitignore`.
+
 ## Definition of Done
 
 - [x] Добавлен GitHub Actions workflow для минимального quality gate.
 - [x] Workflow запускает `python -m pytest tests\unit_smoke -q`.
 - [x] CI не требует live services и не мутирует данные.
 - [x] Локальная команда quality gate проходит.
-- [ ] Документ итерации обновлен итогом, проверками и known warnings.
+- [x] Документ итерации обновлен итогом, проверками и known warnings.
