@@ -212,11 +212,14 @@ Planned
 - добавлен начальный DB schema contract для `data_table`;
 - smoke-тесты проверяют, что runtime-сценарии с `blocks_sql_data` покрыты
   зависимостями таблиц, а зависимости таблиц описаны в DB contract;
-- live DB smoke-проверка warning-only уже подсвечивает текущий drift:
-  в локальной БД есть `few_tx_wallets`, но таблица пока не описана в DB
-  contract;
-- в этой итерации нужно принять решение, является ли `few_tx_wallets` legacy,
-  service/storage table или частью будущей поддерживаемой схемы.
+- live DB smoke-проверка warning-only подсвечивает таблицы, которые есть в БД,
+  но не описаны в DB contract;
+- локальная legacy-таблица `few_tx_wallets` была проверена через
+  `SELECT 1 FROM few_tx_wallets LIMIT 1`, оказалась пустой и была удалена через
+  `DROP TABLE few_tx_wallets` без `VACUUM`;
+- итоговый smoke после удаления: `56 passed, 1 warning`; warning по
+  `few_tx_wallets` исчез, остался только pandas deprecation warning в
+  `data_operations.py`.
 
 ### 7. Аудит старых сценариев запуска из `main.py`
 
