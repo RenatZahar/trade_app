@@ -5,10 +5,51 @@ from dotenv import load_dotenv
 from pathlib import Path
 load_dotenv()
 
+
+class RuntimeConfigError(RuntimeError):
+    """Raised when runtime configuration is incomplete for a scenario."""
+
+
 def _get_path_from_env(name: str, default: str) -> Path:
     raw_value = os.getenv(name, default)
     normalized = raw_value.strip().strip("'\"")
     return Path(normalized)
+
+
+def required_env_names_for(dependency_names):
+    from settings.runtime_contracts import REQUIRED_ENV_BY_DEPENDENCY
+
+    required_names = []
+    for dependency_name in dependency_names:
+        if dependency_name not in REQUIRED_ENV_BY_DEPENDENCY:
+            raise RuntimeConfigError(f"Unknown runtime dependency: {dependency_name}")
+
+        for env_name in REQUIRED_ENV_BY_DEPENDENCY[dependency_name]:
+            if env_name not in required_names:
+                required_names.append(env_name)
+    return tuple(required_names)
+
+
+def validate_required_env(env_names, environ=None):
+    source = os.environ if environ is None else environ
+    missing_names = [
+        env_name
+        for env_name in env_names
+        if not str(source.get(env_name, "")).strip()
+    ]
+    if missing_names:
+        formatted_names = ", ".join(missing_names)
+        raise RuntimeConfigError(
+            f"Missing required environment variables: {formatted_names}"
+        )
+    return tuple(env_names)
+
+
+def validate_runtime_dependencies(dependency_names, environ=None):
+    required_names = required_env_names_for(dependency_names)
+    validate_required_env(required_names, environ=environ)
+    return required_names
+
 
 rpc_user = os.getenv('RPC_USER')
 rpc_password = os.getenv('RPC_PASSWORD')

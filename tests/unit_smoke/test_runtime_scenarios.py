@@ -4,7 +4,10 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 import runtime_scenarios as scenarios
+from settings.runtime import RuntimeConfigError, required_env_names_for
 
 
 def test_import_runtime_scenarios_does_not_change_cwd_or_load_lazy_scenario_modules():
@@ -62,12 +65,18 @@ def test_prepare_training_data_and_train_new_model_orders_pipeline_steps(monkeyp
         "warn_data_table_indexes_for_scenario",
         lambda scenario_name: calls.append(("warn_indexes", scenario_name)),
     )
+    monkeypatch.setattr(
+        scenarios,
+        "run_scenario_preflight",
+        lambda scenario_name: calls.append(("preflight", scenario_name)),
+    )
     monkeypatch.setattr(scenarios, "start_flask_app", lambda: calls.append("start_flask_app"))
     monkeypatch.setattr(scenarios, "update_btc_price_data", lambda: calls.append("update_btc_price_data"))
 
     scenarios.prepare_training_data_and_train_new_model()
 
     assert calls == [
+        ("preflight", "main_pipeline"),
         ("warn_indexes", "main_pipeline"),
         "start_flask_app",
         "update_btc_price_data",
@@ -92,10 +101,16 @@ def test_run_param_grid_scenario_orders_steps(monkeypatch):
         "warn_data_table_indexes_for_scenario",
         lambda scenario_name: calls.append(("warn_indexes", scenario_name)),
     )
+    monkeypatch.setattr(
+        scenarios,
+        "run_scenario_preflight",
+        lambda scenario_name: calls.append(("preflight", scenario_name)),
+    )
 
     scenarios.run_param_grid_scenario(test_fraction=0.25, seed=13)
 
     assert calls == [
+        ("preflight", "param_grid"),
         ("warn_indexes", "param_grid"),
         ("run_param_grid", 0.25, 13),
     ]
@@ -110,6 +125,11 @@ def test_run_parser_monitor_scenario_orders_steps(monkeypatch):
     )
     monkeypatch.setattr(
         scenarios,
+        "run_scenario_preflight",
+        lambda scenario_name: calls.append(("preflight", scenario_name)),
+    )
+    monkeypatch.setattr(
+        scenarios,
         "start_btc_core_monitor_and_parser",
         lambda: calls.append("start_btc_core_monitor_and_parser"),
     )
@@ -117,6 +137,7 @@ def test_run_parser_monitor_scenario_orders_steps(monkeypatch):
     scenarios.run_parser_monitor_scenario(keep_alive=False)
 
     assert calls == [
+        ("preflight", "start_parser"),
         ("warn_indexes", "start_parser"),
         "start_btc_core_monitor_and_parser",
     ]
@@ -139,11 +160,36 @@ def test_run_downloaded_from_btc_data_scenario_orders_steps(monkeypatch):
         "warn_data_table_indexes_for_scenario",
         lambda scenario_name: calls.append(("warn_indexes", scenario_name)),
     )
+    monkeypatch.setattr(
+        scenarios,
+        "run_scenario_preflight",
+        lambda scenario_name: calls.append(("preflight", scenario_name)),
+    )
 
     result = scenarios.run_downloaded_from_btc_data_scenario(blocks_count=3, seed=21)
 
     assert result == {"status": "finished"}
     assert calls == [
+        ("preflight", "integration_live.downloaded_from_btc_data"),
         ("warn_indexes", "integration_live.downloaded_from_btc_data"),
         ("run_downloaded_btc", 3, 21),
     ]
+
+
+def test_scenario_preflight_matrix_declares_external_service_dependencies():
+    assert scenarios.SCENARIO_RUNTIME_DEPENDENCIES["start_parser"] == (
+        "blocks_sql_data",
+        "redis",
+        "bitcoin_core",
+    )
+    assert scenarios.SCENARIO_RUNTIME_DEPENDENCIES[
+        "integration_live.downloaded_from_btc_data"
+    ] == ("blocks_sql_data", "bitcoin_rpc")
+
+
+def test_run_scenario_preflight_reports_missing_external_service_env(monkeypatch):
+    for env_name in required_env_names_for(["redis", "bitcoin_core"]):
+        monkeypatch.delenv(env_name, raising=False)
+
+    with pytest.raises(RuntimeConfigError, match="Missing required environment variables"):
+        scenarios.run_scenario_preflight("start_parser")

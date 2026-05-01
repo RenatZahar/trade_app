@@ -147,6 +147,8 @@
   - единый формат заметок в `docs/` (цель, контекст, решения, next steps).
   - регулярный обзор заметок: удаление устаревшего, фиксация статуса задач.
   - связь заметок с кодом: ссылки на затронутые модули и сценарии запуска.
+  - технический хвост после первого CI gate: оценить постепенное введение lint
+    без обязательного lint всего проекта на старте.
   - фиксация учебных хвостов по Python-механике, если они всплыли в итерациях:
     `raise`, propagation исключений, `*args`, `**kwargs`, сигнатуры функций.
 
@@ -301,8 +303,8 @@
 - `4 - Errors and contracts: done`
 - `5 - Testing foundation: done`
 - `6 - Determinism and experiment control: done`
-- `7 - Module responsibility boundaries: started`
-- `8 - Minimal quality gate in CI: planned`
+- `7 - Module responsibility boundaries: done`
+- `8 - Minimal quality gate in CI: started`
 - `9 - Agentic-ready contours: planned`
 - `10 - Portfolio packaging: planned`
 - `11 - Notes and docs hygiene: planned`

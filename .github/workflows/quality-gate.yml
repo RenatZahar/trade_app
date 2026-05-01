@@ -1,0 +1,32 @@
+name: Quality Gate
+
+on:
+  push:
+    branches:
+      - main_branch
+      - feature/iteration-08-quality-gate-ci
+  pull_request:
+    branches:
+      - main_branch
+
+jobs:
+  smoke-tests:
+    name: Smoke/unit tests
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.lock.txt
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.lock.txt
+
+      - name: Run smoke/unit tests
+        run: python -m pytest tests/unit_smoke -q

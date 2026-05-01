@@ -1,6 +1,33 @@
 import pytest
 
 import cli_args
+from settings.runtime_contracts import (
+    CLI_SCENARIO_TO_RUNTIME_SCENARIO,
+    SCENARIO_RUNTIME_DEPENDENCIES,
+)
+
+
+def _subparser_action(parser):
+    for action in parser._actions:
+        if hasattr(action, "choices") and action.choices:
+            return action
+    raise AssertionError("Parser has no subparser action")
+
+
+def _test_subparser_action(parser):
+    test_parser = _subparser_action(parser).choices["test"]
+    return _subparser_action(test_parser)
+
+
+def _cli_scenarios_from_parser():
+    parser = cli_args.build_parser()
+    top_level_commands = set(_subparser_action(parser).choices)
+    test_commands = {
+        f"test {command_name}"
+        for command_name in _test_subparser_action(parser).choices
+    }
+
+    return {"--start_parser", *top_level_commands - {"test"}, *test_commands}
 
 
 def test_parse_args_accepts_start_parser_flag():
@@ -55,3 +82,21 @@ def test_parse_args_rejects_blocks_count_without_integration_test_command():
 def test_parse_args_requires_one_top_level_scenario():
     with pytest.raises(SystemExit):
         cli_args.parse_args([])
+
+
+def test_arg_parser_exposes_expected_cli_scenarios():
+    assert _cli_scenarios_from_parser() == {
+        "--start_parser",
+        "main-pipeline",
+        "param-grid",
+        "test downloaded-from-btc-data",
+    }
+
+
+def test_cli_scenarios_have_runtime_contract_mapping():
+    cli_scenarios = _cli_scenarios_from_parser()
+
+    assert set(CLI_SCENARIO_TO_RUNTIME_SCENARIO) == cli_scenarios
+    assert set(CLI_SCENARIO_TO_RUNTIME_SCENARIO.values()) <= set(
+        SCENARIO_RUNTIME_DEPENDENCIES
+    )

@@ -116,11 +116,73 @@ Started
 локально, а lint/type/coverage оформить как следующие улучшения после первого
 зеленого CI.
 
+## Отложенные проверки и правила
+
+- Lint всего проекта не входит в обязательный gate восьмой итерации. Хвост:
+  вернуться к постепенному lint baseline в `iteration_11`, когда фокус будет на
+  ревизии и гигиене проекта.
+- Проверки live DB, Redis, Bitcoin RPC, Flask server и внешних сервисов не
+  входят в GitHub Actions gate. Для runtime-сценариев правило такое: внешние
+  сервисы поднимаются или проверяются в начале сценария; при ошибке сценарий
+  должен прерываться с понятным логом/записью в tracker.
+- Проверка обязательных env-переменных допустима в smoke suite только как
+  контракт конфигурации: тест не должен требовать реальные секреты или доступ к
+  live-сервисам.
+
+## Уточненный план после обсуждения
+
+1. Оставить GitHub Actions quality gate на конец итерации: сначала внести и
+   проверить локальные изменения, затем добавить workflow и проверить его на
+   GitHub.
+2. Сверить dependency lock:
+   - найти или восстановить способ генерации `requirements.lock.txt`;
+   - если проектного скрипта нет, зафиксировать явную команду обновления lock;
+   - не смешивать lock с лишними пакетами из случайного глобального окружения.
+   - текущий lock генерируется из активного Python 3.12 окружения; конфликтующий
+     `dask-expr==1.0.14` исключен из freeze, потому что он требует другой
+     `dask`, а проект напрямую использует `dask`/`distributed`.
+3. Добавить smoke-проверки config contract:
+   - validator знает обязательные env-переменные;
+   - отсутствие обязательной переменной дает понятную ошибку;
+   - тесты не требуют реальных секретов, live DB или внешних сервисов.
+4. Ввести или зафиксировать runtime preflight для сценариев:
+   - каждый сценарий декларирует нужные зависимости перед долгой работой в
+     едином runtime contract;
+   - Redis, Bitcoin RPC, Flask и другие live-сервисы проверяются/поднимаются в
+     начале соответствующего сценария;
+   - при ошибке сценарий прерывается с понятным логом и/или tracker event.
+5. Покрыть сценарии smoke-тестами на уровне контрактов:
+   - тестировать не реальный Redis/Bitcoin/Flask, а то, что сценарий вызывает
+     нужный preflight до основной работы;
+   - использовать monkeypatch/fakes для проверки порядка вызовов и ошибок.
+6. В конце итерации добавить минимальный `.github/workflows/...`:
+   - checkout;
+   - setup Python;
+   - install from `requirements.lock.txt`;
+   - run `python -m pytest tests/unit_smoke -q`.
+7. Закрыть итерацию:
+   - локально прогнать `python -m pytest tests\unit_smoke -q`;
+   - проверить GitHub Actions run;
+   - обновить итог, known warnings и отложенные хвосты.
+
+## Industry note (de-facto alternatives)
+
+- Выбранный подход в итерации: минимальный обязательный GitHub Actions gate
+  для `tests/unit_smoke`.
+- Альтернатива (de-facto): разделить CI на обязательный быстрый gate и
+  необязательные extended checks (`lint`, `type checks`, coverage, integration).
+- Почему не берем сейчас: в проекте еще нет baseline workflow, поэтому сначала
+  нужен стабильный зеленый gate без live services и длинных data checks.
+- Мини-пример:
+  ```yaml
+  - name: Run smoke/unit tests
+    run: python -m pytest tests/unit_smoke -q
+  ```
+
 ## Definition of Done
 
-- [ ] Добавлен GitHub Actions workflow для минимального quality gate.
-- [ ] Workflow запускает `python -m pytest tests\unit_smoke -q`.
-- [ ] CI не требует live services и не мутирует данные.
-- [ ] Локальная команда quality gate проходит.
+- [x] Добавлен GitHub Actions workflow для минимального quality gate.
+- [x] Workflow запускает `python -m pytest tests\unit_smoke -q`.
+- [x] CI не требует live services и не мутирует данные.
+- [x] Локальная команда quality gate проходит.
 - [ ] Документ итерации обновлен итогом, проверками и known warnings.
-
