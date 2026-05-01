@@ -382,12 +382,27 @@ git push
 Завершение итерации:
 
 ```bash
+# локально, до финального push
+python -m pytest tests\unit_smoke -q
 git switch main_branch
 git pull
 git merge --no-ff feature/iteration-01-cli
-# smoke checks
 git push
 ```
+
+После финального `git push` обязательно проверить GitHub Actions workflow
+`Quality Gate` на том commit, который ушел в `main_branch`.
+
+Смысл проверки:
+
+- локальный smoke-прогон быстро ловит ошибки до commit/push;
+- GitHub Quality Gate запускает ту же базовую команду
+  `python -m pytest tests/unit_smoke -q`, но в чистом GitHub checkout с
+  установкой зависимостей заново;
+- итерация считается закрытой только после зеленого локального smoke и зеленого
+  GitHub Quality Gate на финальном pushed commit;
+- если GitHub Quality Gate падает, нужно внести fix-коммит, снова push и снова
+  дождаться зеленого run.
 
 ### Быстрый протокол безопасной синхронизации (если есть локальные правки и ветка behind)
 

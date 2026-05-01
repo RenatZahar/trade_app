@@ -119,8 +119,8 @@ Done
 ## Отложенные проверки и правила
 
 - Lint всего проекта не входит в обязательный gate восьмой итерации. Хвост:
-  вернуться к постепенному lint baseline в `iteration_11`, когда фокус будет на
-  ревизии и гигиене проекта.
+  вернуться к постепенному lint baseline в `iteration_13`, когда фокус будет на
+  техническом долге и следующих направлениях развития проекта.
 - Проверки live DB, Redis, Bitcoin RPC, Flask server и внешних сервисов не
   входят в GitHub Actions gate. Для runtime-сценариев правило такое: внешние
   сервисы поднимаются или проверяются в начале сценария; при ошибке сценарий
@@ -162,7 +162,8 @@ Done
    - run `python -m pytest tests/unit_smoke -q`.
 7. Закрыть итерацию:
    - локально прогнать `python -m pytest tests\unit_smoke -q`;
-   - проверить GitHub Actions run;
+   - сделать финальный push;
+   - проверить GitHub Actions run на финальном pushed commit;
    - обновить итог, known warnings и отложенные хвосты.
 
 ## Industry note (de-facto alternatives)
