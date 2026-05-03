@@ -18,6 +18,7 @@ import aiosqlite
 from functools import wraps
 import numpy as np
 
+from modules.logger.timing import timed_step
 from modules.redis_init.redis_init import send_message
 
 from settings.paths import CLEARED_PRICES_DIR
@@ -52,6 +53,61 @@ print_lock = asyncio.Lock()
 save_semaphore = asyncio.Semaphore(MAX_SAVE_TASKS) #пока дожидаемся сохранения перед след циклом загрузки
 import logging
 logger = logging.getLogger("app")
+
+
+def extract_json_rpc_results(json_response, expected_count=None):
+    if not isinstance(json_response, list):
+        raise RuntimeError(f"Некорректный формат JSON-RPC ответа: {type(json_response).__name__}")
+
+    errors = [
+        item
+        for item in json_response
+        if isinstance(item, dict) and item.get("error") is not None
+    ]
+    if errors:
+        error_preview = errors[:5]
+        raise RuntimeError(
+            f"JSON-RPC batch вернул ошибки: count={len(errors)} preview={error_preview}"
+        )
+
+    results = [
+        item["result"]
+        for item in json_response
+        if isinstance(item, dict) and "result" in item
+    ]
+    if expected_count is not None and len(results) != expected_count:
+        raise RuntimeError(
+            "JSON-RPC batch вернул неполный ответ: "
+            f"expected={expected_count} actual={len(results)}"
+        )
+    return results
+
+
+def configure_cache_limits(tx_cache_lines=None, hash_cache_lines=None):
+    global MAX_LINES_IN_TX_CACHE, MAX_LINES_IN_HASH_CACHE, tx_cache, blocks_hash_cache
+
+    if tx_cache_lines is not None:
+        MAX_LINES_IN_TX_CACHE = int(tx_cache_lines)
+    if hash_cache_lines is not None:
+        MAX_LINES_IN_HASH_CACHE = int(hash_cache_lines)
+
+    if MAX_LINES_IN_TX_CACHE <= 0:
+        tx_cache.clear()
+    if MAX_LINES_IN_HASH_CACHE <= 0:
+        blocks_hash_cache.clear()
+
+    general_cleaning_of_caches()
+
+
+def get_cache_metadata() -> dict:
+    return {
+        "max_lines_in_tx_cache": MAX_LINES_IN_TX_CACHE,
+        "max_lines_in_hash_cache": MAX_LINES_IN_HASH_CACHE,
+        "tx_cache_enabled": MAX_LINES_IN_TX_CACHE > 0,
+        "blocks_hash_cache_enabled": MAX_LINES_IN_HASH_CACHE > 0,
+        "tx_cache_current_rows": len(tx_cache),
+        "blocks_hash_cache_current_rows": len(blocks_hash_cache),
+    }
     
 def retry(max_attempts=3, delay=1, exceptions=(Exception,)):
     def decorator(func):
@@ -203,9 +259,13 @@ def init_cache():
     global tx_cache, blocks_hash_cache
     tx_cache_filename = 'tx_cache.pkl'
     blocks_hash_cache_filename = 'blocks_hash_cache.pkl'
-    if not tx_cache:
+    if MAX_LINES_IN_TX_CACHE <= 0:
+        tx_cache.clear()
+    elif not tx_cache:
         tx_cache = open_tx_cache(tx_cache_filename)
-    if not blocks_hash_cache:
+    if MAX_LINES_IN_HASH_CACHE <= 0:
+        blocks_hash_cache.clear()
+    elif not blocks_hash_cache:
         blocks_hash_cache = open_blocks_hash_cache(blocks_hash_cache_filename)
 
 def open_tx_cache(filename):
@@ -242,22 +302,28 @@ def open_blocks_hash_cache(filename):
 
 def general_cleaning_of_caches():
     global tx_cache, blocks_hash_cache
-    if len(tx_cache) > MAX_LINES_IN_TX_CACHE:
-                num_to_remove = int(len(tx_cache) - MAX_LINES_IN_TX_CACHE)
-                for _ in range(num_to_remove):
-                    tx_cache.popitem(last=False)
+    if MAX_LINES_IN_TX_CACHE <= 0:
+        tx_cache.clear()
+    elif len(tx_cache) > MAX_LINES_IN_TX_CACHE:
+        num_to_remove = int(len(tx_cache) - MAX_LINES_IN_TX_CACHE)
+        for _ in range(num_to_remove):
+            tx_cache.popitem(last=False)
     
-    if len(blocks_hash_cache) > MAX_LINES_IN_HASH_CACHE:
+    if MAX_LINES_IN_HASH_CACHE <= 0:
+        blocks_hash_cache.clear()
+    elif len(blocks_hash_cache) > MAX_LINES_IN_HASH_CACHE:
         num_to_remove = int(len(blocks_hash_cache) - MAX_LINES_IN_HASH_CACHE)
         for _ in range(num_to_remove):
             blocks_hash_cache.popitem(last=False)
-    logger.info(f'Строк в tx_cache: {len(tx_cache)}')
-    logger.info(f'Строк в blocks_hash_cache: {len(blocks_hash_cache)}')
 
 async def save_to_cache(tx_details_list, cache_type, old_txs = False):
     global tx_cache, blocks_hash_cache
     # добавление в кэш
     general_cleaning_of_caches()
+    if cache_type == 'tx_cache' and MAX_LINES_IN_TX_CACHE <= 0:
+        return
+    if cache_type == 'hash_cache' and MAX_LINES_IN_HASH_CACHE <= 0:
+        return
     async with cache_lock:
         for i in tx_cache:
             if i in blocks_hash_cache:
@@ -293,6 +359,7 @@ async def save_to_cache(tx_details_list, cache_type, old_txs = False):
                     vout = tx_detail['vout']
                     if len(vout) > 5:
                         blocks_hash_cache[txid] = tx_detail.get('blockhash', None)
+    general_cleaning_of_caches()
 
 async def async_get_existing_last_block(db_path, start_block):
     try:
@@ -316,8 +383,11 @@ async def async_get_existing_last_block(db_path, start_block):
 
 def get_bicoin_prices(filepath):
     df = pd.read_parquet(CLEARED_PRICES_DIR)
-    logger.info('CLEARED_PRICES_DIR')
-    logger.info(f'\n{df.tail()}')
+    logger.info(
+        "Загружены цены BTC: path=%s rows=%s",
+        CLEARED_PRICES_DIR,
+        len(df),
+    )
     return df
     
 async def get_btc_price_of_timestamp(timestamp, btc_price):
@@ -459,8 +529,10 @@ async def async_rpc_connection(rpc_method, height, *args):
                 async with session.post(url, data=json.dumps(requests), headers=headers) as response:
                     if response.status == 200:
                         json_response = await response.json()
-                        results = [item['result'] for item in json_response if 'result' in item]
-                        return results
+                        return extract_json_rpc_results(
+                            json_response,
+                            expected_count=len(requests),
+                        )
 
                     else:
                         attempt += 1
@@ -475,7 +547,7 @@ async def async_rpc_connection(rpc_method, height, *args):
                 last_exception = e
                 logger.error(f'Ошибка запроса: {e}, блок {height}')
                 logger.error(f'Попытка {i+1}')
-                logger.error(exc_info=True)
+                logger.error("Исключение при async RPC-запросе", exc_info=True)
                 await asyncio.sleep(10)  # Задержка перед повторной попыткой
 
         logger.error("Не удалось установить соединение после 150 попыток.")
@@ -496,13 +568,33 @@ async def asi_sleep(attempt):
         await asyncio.sleep(1)
 
 async def parsing_data(block_list):
-    init_cache()
-    btc_price = get_bicoin_prices(CLEARED_PRICES_DIR)
-    rpc_connection = get_rpc_connection()   
-    height, blocks_hashes, block_times, transactions_of_group_of_block = get_transactions_of_blocks(block_list, rpc_connection) 
-    all_records = await process_all_blocks(height, blocks_hashes, block_times, transactions_of_group_of_block, btc_price, rpc_connection)
-    pd_data = records_to_df(all_records)
-    gc.collect()
+    with timed_step("parser.parsing_data_total", blocks=block_list) as total_timing:
+        with timed_step("parser.cache_initialized", blocks=block_list) as timing:
+            init_cache()
+            timing.update(get_cache_metadata())
+
+        with timed_step("parser.prices_loaded") as timing:
+            btc_price = get_bicoin_prices(CLEARED_PRICES_DIR)
+            timing["price_rows"] = len(btc_price)
+
+        with timed_step("parser.blocks_loaded", requested_blocks=len(block_list)) as timing:
+            rpc_connection = get_rpc_connection()
+            height, blocks_hashes, block_times, transactions_of_group_of_block = get_transactions_of_blocks(block_list, rpc_connection)
+            timing["loaded_blocks"] = len(height)
+            timing["tx_count"] = sum(len(txs) for txs in transactions_of_group_of_block)
+
+        with timed_step("parser.blocks_processed", loaded_blocks=len(height)) as timing:
+            all_records = await process_all_blocks(height, blocks_hashes, block_times, transactions_of_group_of_block, btc_price, rpc_connection)
+            timing["records"] = len(all_records)
+
+        with timed_step("parser.records_to_df", source_records=len(all_records)) as timing:
+            pd_data = records_to_df(all_records)
+            timing["df_rows"] = len(pd_data)
+
+        with timed_step("parser.gc_collect"):
+            gc.collect()
+
+        total_timing["df_rows"] = len(pd_data)
     return pd_data  
 
 def get_transactions_of_blocks(block_list, rpc_connection):
@@ -535,41 +627,67 @@ async def process_all_blocks(heights, blocks_hashes, block_times, transactions_o
 
 async def process_block(index, number, height, block_hash, block_time, transactions_of_block, btc_price, rpc_connection):
     global tx_cache, blocks_hash_cache
-    records_of_block = []
-    logger.info(f'Обработка блока {height}, {index+1}/{number}, транзакций: {len(transactions_of_block)}')
+    with timed_step("block.total", block=height, tx_count=len(transactions_of_block)) as total_timing:
+        records_of_block = []
+        logger.info(f'Обработка блока {height}, {index+1}/{number}, транзакций: {len(transactions_of_block)}')
 
-    btc_time_price = await get_btc_price_of_timestamp(block_time, btc_price)
-    commands = [["getrawtransaction", [tx, 1, block_hash]] for tx in transactions_of_block]
-    # logger.info(f'Отправка запроса для {height}')
-    start_time = time.time()
-    tx_details_list = await async_rpc_connection(None, height, commands)
-    end_time = time.time()
-    logger.info(f'Блок {height}, {index+1}/{number}, получение данных по \033[93mvout, сек: {round(end_time-start_time, 4)}\033[0m, транзакций: {len(tx_details_list)}')
-    tx_details_list = await amount_and_counbase_filter(tx_details_list)
-    await save_to_cache(tx_details_list, 'tx_cache')  
-            
-    prev_tx_vout_to_current_tx_map = {}
-    for tx_details in tx_details_list:
-        current_tx_id = tx_details['txid']
-        for vin in tx_details['vin']:
-            if 'txid' in vin and 'vout' in vin:
-                prev_tx_id = vin['txid']
-                vout = vin['vout']
-                if prev_tx_id not in prev_tx_vout_to_current_tx_map:
-                    prev_tx_vout_to_current_tx_map[prev_tx_id] = {}
-                if vout not in prev_tx_vout_to_current_tx_map[prev_tx_id]:
-                    prev_tx_vout_to_current_tx_map[prev_tx_id][vout] = {}
-                prev_tx_vout_to_current_tx_map[prev_tx_id][vout] = (current_tx_id)
-        tx_id = tx_details['txid']
-        
-        records = await cleaning_tx_vout_data(tx_id, tx_details, height, block_hash, block_time, btc_time_price)
-        if records:
-            # print(records)
-            records_of_block.extend(records)
-    records = await cleaning_tx_vin_data(index, number, prev_tx_vout_to_current_tx_map, height, block_hash, block_time, btc_time_price)
-    if records:
-        records_of_block.extend(records)
-    return records_of_block
+        with timed_step("block.price_lookup", block=height):
+            btc_time_price = await get_btc_price_of_timestamp(block_time, btc_price)
+
+        commands = [["getrawtransaction", [tx, 1, block_hash]] for tx in transactions_of_block]
+        # logger.info(f'Отправка запроса для {height}')
+        with timed_step("block.vout_rpc", block=height, commands=len(commands)) as timing:
+            tx_details_list = await async_rpc_connection(None, height, commands)
+            timing["transactions"] = len(tx_details_list)
+        logger.info(f'Блок {height}, {index+1}/{number}, получение данных по vout, транзакций: {len(tx_details_list)}')
+
+        with timed_step("block.vout_filter", block=height) as timing:
+            tx_details_list = await amount_and_counbase_filter(tx_details_list)
+            timing["filtered_transactions"] = len(tx_details_list)
+
+        with timed_step("block.current_tx_cache_save", block=height) as timing:
+            await save_to_cache(tx_details_list, 'tx_cache')
+            timing["tx_cache_rows"] = len(tx_cache)
+            timing["blocks_hash_cache_rows"] = len(blocks_hash_cache)
+
+        with timed_step("block.vout_records_built", block=height) as timing:
+            prev_tx_vout_to_current_tx_map = {}
+            for tx_details in tx_details_list:
+                current_tx_id = tx_details['txid']
+                for vin in tx_details['vin']:
+                    if 'txid' in vin and 'vout' in vin:
+                        prev_tx_id = vin['txid']
+                        vout = vin['vout']
+                        if prev_tx_id not in prev_tx_vout_to_current_tx_map:
+                            prev_tx_vout_to_current_tx_map[prev_tx_id] = {}
+                        if vout not in prev_tx_vout_to_current_tx_map[prev_tx_id]:
+                            prev_tx_vout_to_current_tx_map[prev_tx_id][vout] = {}
+                        prev_tx_vout_to_current_tx_map[prev_tx_id][vout] = (current_tx_id)
+                tx_id = tx_details['txid']
+
+                records = await cleaning_tx_vout_data(tx_id, tx_details, height, block_hash, block_time, btc_time_price)
+                if records:
+                    # print(records)
+                    records_of_block.extend(records)
+            timing["prev_tx_count"] = len(prev_tx_vout_to_current_tx_map)
+            timing["records"] = len(records_of_block)
+
+        with timed_step("block.vin_total", block=height) as timing:
+            records = await cleaning_tx_vin_data(
+                index,
+                number,
+                prev_tx_vout_to_current_tx_map,
+                height,
+                block_hash,
+                block_time,
+                btc_time_price,
+            )
+            if records:
+                records_of_block.extend(records)
+            timing["vin_records"] = len(records) if records else 0
+
+        total_timing["records"] = len(records_of_block)
+        return records_of_block
     
 
 
@@ -588,100 +706,122 @@ async def cleaning_tx_vout_data(tx_id, tx_details, height, block_hash, block_tim
         records.append([tx_id, wallet_id, amount, btc_time_price, block_time, height, block_hash, n]) 
     return records
 
-async def cleaning_tx_vin_data(index, number, prev_tx_vout_to_current_tx_map, height, current_block_hash, block_time, btc_time_price):
+async def cleaning_tx_vin_data(
+    index,
+    number,
+    prev_tx_vout_to_current_tx_map,
+    height,
+    current_block_hash,
+    block_time,
+    btc_time_price,
+):
     global tx_cache, blocks_hash_cache, avg_cache_vin, avg_hash_for_vin
     # счетчик tx к скачке и сколько записей надо
-    prev_tx_id_count = 0
-    vout_to_tx_map_count = 0
-    for prev_tx_id, vout_to_tx_map in prev_tx_vout_to_current_tx_map.items():
-        prev_tx_id_count += 1
-        for i in vout_to_tx_map:
-            vout_to_tx_map_count += 1
+    with timed_step("block.vin_count_inputs", block=height) as timing:
+        prev_tx_id_count = 0
+        vout_to_tx_map_count = 0
+        for prev_tx_id, vout_to_tx_map in prev_tx_vout_to_current_tx_map.items():
+            prev_tx_id_count += 1
+            for i in vout_to_tx_map:
+                vout_to_tx_map_count += 1
+        timing["prev_tx_count"] = prev_tx_id_count
+        timing["vout_links"] = vout_to_tx_map_count
 
-    async with print_lock:        
+    async with print_lock:
         logger.info(f'Блок {height}, {index+1}/{number}. Всего tx для входов: {prev_tx_id_count}, выходов: {vout_to_tx_map_count}')
-    
-    commands = []
-    prev_tx_details_list_cache= []
-    commands_with_hash = 0
-    commands_without_hash = 0 
-    prev_tx_details_list_cache_count = 0
-    for prev_tx_id, vout_to_tx_map in prev_tx_vout_to_current_tx_map.items():
-        if prev_tx_id in tx_cache:
-            prev_tx_details_list_cache_count += 1
-            prev_tx_details_list_cache.append(tx_cache[prev_tx_id])
-            continue
-        block_hash = blocks_hash_cache.get(prev_tx_id)
-        if block_hash:
-            commands_with_hash += 1
-            commands.append(["getrawtransaction", [prev_tx_id, 1, block_hash]]) 
-        else:
-            commands_without_hash += 1
-            commands.append(["getrawtransaction", [prev_tx_id, 1]])
-    try:
-        cache_vin_percnt =  round((prev_tx_details_list_cache_count/(len(commands)+prev_tx_details_list_cache_count)*100), 2)
-    except ZeroDivisionError:
-        return 0
-    try:
-        hash_for_vin_percnt = round((commands_with_hash/(len(prev_tx_vout_to_current_tx_map)-prev_tx_details_list_cache_count+1)*100), 2)
-    except ZeroDivisionError:
-        return 0
-    async with avg_lock:
-        avg_cache_vin.append(cache_vin_percnt)
-        avg_hash_for_vin.append(hash_for_vin_percnt)
+
+    with timed_step("block.vin_commands_built", block=height) as timing:
+        commands = []
+        prev_tx_details_list_cache= []
+        commands_with_hash = 0
+        commands_without_hash = 0
+        prev_tx_details_list_cache_count = 0
+        for prev_tx_id, vout_to_tx_map in prev_tx_vout_to_current_tx_map.items():
+            if prev_tx_id in tx_cache:
+                prev_tx_details_list_cache_count += 1
+                prev_tx_details_list_cache.append(tx_cache[prev_tx_id])
+                continue
+            block_hash = blocks_hash_cache.get(prev_tx_id)
+            if block_hash:
+                commands_with_hash += 1
+                commands.append(["getrawtransaction", [prev_tx_id, 1, block_hash]])
+            else:
+                commands_without_hash += 1
+                commands.append(["getrawtransaction", [prev_tx_id, 1]])
+        try:
+            cache_vin_percnt =  round((prev_tx_details_list_cache_count/(len(commands)+prev_tx_details_list_cache_count)*100), 2)
+        except ZeroDivisionError:
+            return 0
+        try:
+            hash_for_vin_percnt = round((commands_with_hash/(len(prev_tx_vout_to_current_tx_map)-prev_tx_details_list_cache_count+1)*100), 2)
+        except ZeroDivisionError:
+            return 0
+        async with avg_lock:
+            avg_cache_vin.append(cache_vin_percnt)
+            avg_hash_for_vin.append(hash_for_vin_percnt)
+        async with print_lock:
+            logger.info(f'Загружено tx из кэша для vin: {cache_vin_percnt}% от всех vin, кол-во: {prev_tx_details_list_cache_count}')
+            logger.info(f'Команд с хэшем: {commands_with_hash}, {hash_for_vin_percnt}%, осталось команд без хэша: {commands_without_hash}')
+        timing["commands"] = len(commands)
+        timing["cache_hits"] = prev_tx_details_list_cache_count
+        timing["commands_with_hash"] = commands_with_hash
+        timing["commands_without_hash"] = commands_without_hash
+        timing["cache_hit_pct"] = cache_vin_percnt
+
+    with timed_step("block.vin_rpc", block=height, commands=len(commands)) as timing:
+        prev_tx_details_list = await async_rpc_connection(None, height, commands)
+        timing["transactions"] = len(prev_tx_details_list)
+
+    with timed_step("block.prev_tx_cache_save", block=height) as timing:
+        await save_to_cache(prev_tx_details_list, 'tx_cache', old_txs = True )
+        timing["tx_cache_rows"] = len(tx_cache)
+        timing["blocks_hash_cache_rows"] = len(blocks_hash_cache)
+
     async with print_lock:
-        logger.info(f'Загружено tx из кэша для vin: {cache_vin_percnt}% от всех vin, кол-во: {prev_tx_details_list_cache_count}')
-        logger.info(f'Команд с хэшем: {commands_with_hash}, {hash_for_vin_percnt}%, осталось команд без хэша: {commands_without_hash}')
+        logger.info(f'Блок {height}, {index+1}/{number}. Получение данных по vin, транзакций: {len(prev_tx_details_list)}')
 
-    start_time = time.time()
-    prev_tx_details_list = await async_rpc_connection(None, height, commands)
-    end_time = time.time()
-    
-    await save_to_cache(prev_tx_details_list, 'tx_cache', old_txs = True )
+    with timed_step("block.vin_filter_merge", block=height) as timing:
+        prev_tx_details_list = [
+            tx_details for tx_details in prev_tx_details_list
+            if tx_details is not None and
+            tx_details and  # Проверка на непустоту tx_details
+            not any('coinbase' in vin_entry for vin_entry in tx_details.get('vin', []))
+                                ]
 
-    async with print_lock:
-        logger.info(f'Блок {height}, {index+1}/{number}. Получение данных по vin, сек: {round(end_time-start_time, 4)}, транзакций: {len(prev_tx_details_list)}')
+        prev_tx_details_list.extend(prev_tx_details_list_cache)
+        prev_tx_details_list_cache = []
+        timing["transactions"] = len(prev_tx_details_list)
 
-    prev_tx_details_list = [
-        tx_details for tx_details in prev_tx_details_list 
-        if tx_details is not None and 
-        tx_details and  # Проверка на непустоту tx_details
-        not any('coinbase' in vin_entry for vin_entry in tx_details.get('vin', []))
-                            ]
-    
-    prev_tx_details_list.extend(prev_tx_details_list_cache)
-    prev_tx_details_list_cache = []
+    with timed_step("block.vin_records_built", block=height) as timing:
+        records = []
+        dwn_prev_tx_details_dict = {}
+        for tx in prev_tx_details_list:
+            dwn_prev_tx_details_dict[tx['txid']] = tx
 
-    start_time = time.time()
-    records = []
-    dwn_prev_tx_details_dict = {}
-    for tx in prev_tx_details_list:
-        dwn_prev_tx_details_dict[tx['txid']] = tx
-        
-    for prev_tx_id, links in prev_tx_vout_to_current_tx_map.items():
-        if prev_tx_id in dwn_prev_tx_details_dict:
-            tx_details = dwn_prev_tx_details_dict[prev_tx_id]
-            for vout_detail in tx_details['vout']:
-                for link in links:
-                    if link == vout_detail['n']:
-                        current_tx_id = prev_tx_vout_to_current_tx_map[prev_tx_id][link]
-                        amount = -vout_detail['value']
-                        wallet_id = vout_detail['scriptPubKey'].get('address', None)
-                        current_record = [current_tx_id, wallet_id, amount, btc_time_price, block_time, height, current_block_hash, link]
-                        records.append(current_record)
+        for prev_tx_id, links in prev_tx_vout_to_current_tx_map.items():
+            if prev_tx_id in dwn_prev_tx_details_dict:
+                tx_details = dwn_prev_tx_details_dict[prev_tx_id]
+                for vout_detail in tx_details['vout']:
+                    for link in links:
+                        if link == vout_detail['n']:
+                            current_tx_id = prev_tx_vout_to_current_tx_map[prev_tx_id][link]
+                            amount = -vout_detail['value']
+                            wallet_id = vout_detail['scriptPubKey'].get('address', None)
+                            current_record = [current_tx_id, wallet_id, amount, btc_time_price, block_time, height, current_block_hash, link]
+                            records.append(current_record)
 
-                        if prev_tx_id in tx_cache:  
-                            tx_cache_details = tx_cache[prev_tx_id]
-                            vout_list = tx_cache_details.get('vout', [])
-                            vout_list = [vout for vout in vout_list if vout.get('n') != vout_detail['n']]
-                            async with cache_lock:
-                                tx_cache[prev_tx_id]['vout'] = vout_list
-                                if not vout_list:
-                                    del tx_cache[prev_tx_id]
-                                    
-    prev_tx_vout_to_current_tx_map = {}
-    dwn_prev_tx_details_dict = {}    
-    end_time = time.time()
+                            if prev_tx_id in tx_cache:
+                                tx_cache_details = tx_cache[prev_tx_id]
+                                vout_list = tx_cache_details.get('vout', [])
+                                vout_list = [vout for vout in vout_list if vout.get('n') != vout_detail['n']]
+                                async with cache_lock:
+                                    tx_cache[prev_tx_id]['vout'] = vout_list
+                                    if not vout_list:
+                                        del tx_cache[prev_tx_id]
+
+        prev_tx_vout_to_current_tx_map = {}
+        dwn_prev_tx_details_dict = {}
+        timing["records"] = len(records)
     logger.info(f'Блок {height}, {index+1}/{number}. Команд {len(commands)}, из кэша {prev_tx_details_list_cache_count}, сумма {len(commands)+prev_tx_details_list_cache_count}, сколько скачать надо {prev_tx_id_count}')
     logger.info(f'Блок {height}, {index+1}/{number}. Всего скачанных записей с продажей {len(records)}, должно равняться {vout_to_tx_map_count}')
     if len(records) != vout_to_tx_map_count:
@@ -781,7 +921,7 @@ async def async_save_data_to_db(data, db_path, table_name='data_table'):
             await db.commit()  # Фиксация транзакции
             # logger.info("Транзакция успешно зафиксирована.")
             # logger.info(f"Сохранено {len(records)} записей в таблицу '{table_name}'.")
-            logger.info("\033[92mОбработка завершена, данные сохранены.\033[0m")
+            logger.info("Обработка завершена, данные сохранены.")
 
     except Exception as e:
         logger.error(f"Ошибка при сохранении данных в базу данных: {e}")
@@ -795,10 +935,6 @@ def print_cicle_info(start_time, min_block_height, max_block_height, len_blocks_
     global avg_cache_vin, avg_hash_for_vin
     end_time = time.time()
     cicle_time =  end_time - start_time
-    # print(f"\nРазмер tx_cache в памяти: {int((asizeof.asizeof(tx_cache))/1000000)} мегабайт")
-    logger.info(f"Строк в tx_cache: {len(tx_cache)}")
-    # print(f"Размер blocks_hash_cache в памяти: {int((asizeof.asizeof(blocks_hash_cache))/1000000)} мегабайт")
-    logger.info(f"Строк в blocks_hash_cache : {len(blocks_hash_cache)}")
     logger.info(f'Больше нуля в df: {len(df.loc[df.Amount > 0])}, меньше нуля в df: {len(df.loc[df.Amount < 0])}')
     logger.info(f'Больше нуля минус меньше нуля в дф: {len(df.loc[df.Amount > 0])-len(df.loc[df.Amount < 0])}, всего срок: {len(df)}')
     logger.info(f'Сохранено {min_block_height} - {max_block_height}')
@@ -824,6 +960,6 @@ def get_avg_blocks_in_minut(time_of_circle):
         five_times += i
     if len(avg_times) > 5:
         logger.info(f'За последние пять блоков: {round((five_times/5), 2)} блоков/мин')
-    logger.info(f'\n\033[93mСредняя скорость за {len(avg_times)} итераций: {round(total_avg_time, 2)} блоков/мин\033[0m')
+    logger.info(f'\nСредняя скорость за {len(avg_times)} итераций: {round(total_avg_time, 2)} блоков/мин')
     
 

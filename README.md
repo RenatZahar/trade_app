@@ -69,12 +69,19 @@ The current CLI exposes:
 python main.py main-pipeline
 python main.py param-grid --test-fraction 0.1 --seed 42
 python main.py --start_parser
+python main.py --start_parser --parser-tx-cache-lines 0 --parser-hash-cache-lines 0
 python main.py test downloaded-from-btc-data 10 42
+python main.py test downloaded-from-btc-data --blocks 873754,873755
 ```
 
 These commands are live/runtime scenarios. They may require local services,
 configured paths, and project data. The smoke test command above is the safer
 first check for a fresh checkout.
+
+For the current Bitcoin RPC parser flow, the recommended parser group size is
+`QUANTITY_OF_BLOCKS_IN_ITERATION = 10` in [`settings/parser.py`](settings/parser.py).
+Larger values can overload local Bitcoin Core RPC before the Python pipeline
+itself becomes the bottleneck.
 
 ## Runtime Dependencies
 

@@ -60,6 +60,7 @@ def test_prepare_training_data_and_train_new_model_orders_pipeline_steps(monkeyp
         "modules.teach_and_update_models.training_entrypoints",
         training_module,
     )
+    cache_settings = []
     monkeypatch.setattr(
         scenarios,
         "warn_data_table_indexes_for_scenario",
@@ -118,6 +119,7 @@ def test_run_param_grid_scenario_orders_steps(monkeypatch):
 
 def test_run_parser_monitor_scenario_orders_steps(monkeypatch):
     calls = []
+    cache_settings = []
     monkeypatch.setattr(
         scenarios,
         "warn_data_table_indexes_for_scenario",
@@ -133,21 +135,40 @@ def test_run_parser_monitor_scenario_orders_steps(monkeypatch):
         "start_btc_core_monitor_and_parser",
         lambda: calls.append("start_btc_core_monitor_and_parser"),
     )
+    monkeypatch.setattr(
+        scenarios.apf,
+        "configure_cache_limits",
+        lambda tx_cache_lines=None, hash_cache_lines=None: cache_settings.append(
+            (tx_cache_lines, hash_cache_lines)
+        ),
+    )
+    monkeypatch.setattr(
+        scenarios.apf,
+        "get_cache_metadata",
+        lambda: {"max_lines_in_tx_cache": 0, "max_lines_in_hash_cache": 0},
+    )
 
-    scenarios.run_parser_monitor_scenario(keep_alive=False)
+    scenarios.run_parser_monitor_scenario(
+        keep_alive=False,
+        tx_cache_lines=0,
+        hash_cache_lines=0,
+    )
 
     assert calls == [
         ("preflight", "start_parser"),
         ("warn_indexes", "start_parser"),
         "start_btc_core_monitor_and_parser",
     ]
+    assert cache_settings == [(0, 0)]
 
 
 def test_run_downloaded_from_btc_data_scenario_orders_steps(monkeypatch):
     calls = []
     helper_module = types.ModuleType("tests.integration_live.downloaded_from_btc_scenario")
     helper_module.run_downloaded_from_btc_data_test_scenario = (
-        lambda blocks_count, seed=None: calls.append(("run_downloaded_btc", blocks_count, seed))
+        lambda blocks_count=None, seed=None, requested_blocks=None: calls.append(
+            ("run_downloaded_btc", blocks_count, seed, requested_blocks)
+        )
         or {"status": "finished"}
     )
     monkeypatch.setitem(
@@ -166,13 +187,17 @@ def test_run_downloaded_from_btc_data_scenario_orders_steps(monkeypatch):
         lambda scenario_name: calls.append(("preflight", scenario_name)),
     )
 
-    result = scenarios.run_downloaded_from_btc_data_scenario(blocks_count=3, seed=21)
+    result = scenarios.run_downloaded_from_btc_data_scenario(
+        blocks_count=3,
+        seed=21,
+        blocks=[873754, 873755],
+    )
 
     assert result == {"status": "finished"}
     assert calls == [
         ("preflight", "integration_live.downloaded_from_btc_data"),
         ("warn_indexes", "integration_live.downloaded_from_btc_data"),
-        ("run_downloaded_btc", 3, 21),
+        ("run_downloaded_btc", 3, 21, [873754, 873755]),
     ]
 
 

@@ -12,6 +12,7 @@ logger = logging.getLogger("app")
 def format_downloaded_from_btc_stage_details(test_summary: dict) -> str:
     details_payload = {
         "requested_blocks": test_summary.get("requested_blocks", []),
+        "selection_mode": test_summary.get("selection_mode"),
         "seed": test_summary.get("seed"),
         "status": test_summary.get("status", "finished"),
         "comparison_status": test_summary.get("comparison_status"),
@@ -39,7 +40,11 @@ def format_downloaded_from_btc_stage_details(test_summary: dict) -> str:
     return json.dumps(details_payload, ensure_ascii=False)
 
 
-def run_downloaded_from_btc_data_test_scenario(blocks_count: int, seed: int | None = None):
+def run_downloaded_from_btc_data_test_scenario(
+    blocks_count: int | None = None,
+    seed: int | None = None,
+    requested_blocks: list[int] | None = None,
+):
     tracker = get_current_run_tracker()
     stage_name = "integration_live.test_downloaded_from_btc_data"
     stage_data = tracker.start_stage(stage_name)
@@ -49,6 +54,7 @@ def run_downloaded_from_btc_data_test_scenario(blocks_count: int, seed: int | No
         test_summary = run_downloaded_from_btc_data_test(
             blocks_count=blocks_count,
             seed=seed,
+            requested_blocks=requested_blocks,
         )
     except Exception as e:
         stage_data = tracker.finish_stage("error", details=str(e))

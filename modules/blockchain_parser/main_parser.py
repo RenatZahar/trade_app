@@ -7,6 +7,7 @@ from pathlib import Path
 from bitcoinrpc.authproxy import AuthServiceProxy
 from modules.redis_init.redis_init import send_message
 import modules.logger.logger as app_logger_module
+from modules.logger.timing import timed_step
 
 from . import async_parser_functions as apf
 # import tests
@@ -69,16 +70,24 @@ async def parser():
             app_logger_module.log_tracker_stage_started(tracker, stage_data)
             
             start_time = time.time()
-            data = await apf.parsing_data(blocks_group)
+            with timed_step("parser.process_blocks_group.parsing_data", blocks=blocks_group) as timing:
+                data = await apf.parsing_data(blocks_group)
+                timing["df_rows"] = len(data)
             if not data.empty:
-                min_block_height, max_block_height = apf.get_statistik_data(data)
+                with timed_step("parser.process_blocks_group.stats", blocks=blocks_group) as timing:
+                    min_block_height, max_block_height = apf.get_statistik_data(data)
+                    timing["min_block"] = min_block_height
+                    timing["max_block"] = max_block_height
                 save_task = asyncio.create_task(apf.save_data_to_db_with_semaphore(data, BLOCKS_SQL_DATA))
                 tasks.append(save_task)
-                time_of_circle = apf.print_cicle_info(start_time, min_block_height, max_block_height , len(blocks_group), data, QUANTITY_OF_BLOCKS_IN_ITERATION) # type: ignore
+                with timed_step("parser.process_blocks_group.cycle_info", blocks=blocks_group):
+                    time_of_circle = apf.print_cicle_info(start_time, min_block_height, max_block_height , len(blocks_group), data, QUANTITY_OF_BLOCKS_IN_ITERATION) # type: ignore
                 apf.get_avg_blocks_in_minut(time_of_circle)
 
                 if tasks:
-                    await asyncio.gather(*tasks)
+                    with timed_step("parser.process_blocks_group.save_wait", blocks=blocks_group, df_rows=len(data)):
+                        await asyncio.gather(*tasks)
+                        tasks.clear()
 
                 stage_data = tracker.finish_stage(
                     'success',
@@ -87,14 +96,16 @@ async def parser():
                 app_logger_module.log_tracker_stage_finished(tracker, stage_data)
 
 
-            stage_data = tracker.finish_stage('success', details=f'blocks={len(blocks_group)} data_is_empty')
-            app_logger_module.log_tracker_stage_finished(tracker, stage_data)
+            else:
+                stage_data = tracker.finish_stage('success', details=f'blocks={len(blocks_group)} data_is_empty')
+                app_logger_module.log_tracker_stage_finished(tracker, stage_data)
 
         logger.info("Закончились блоки для скачки, ожидаем перезапуск")
         send_message('parser_status', 'completed')
     except Exception as e:
         stage_data = tracker.finish_stage('error', details=str(e))
-        app_logger_module.log_tracker_stage_finished(tracker, stage_data)
+        if stage_data is not None:
+            app_logger_module.log_tracker_stage_finished(tracker, stage_data)
         logger.error(f"Произошла ошибка: {e}")
         raise
 

@@ -18,6 +18,26 @@ def test_build_experiment_metadata_collects_seed_args_and_runtime(monkeypatch):
     assert metadata["versions"]["sklearn"] == "scikit-learn-version"
     assert metadata["runtime"]["blocks_sql_data"]
     assert "txs_moved" in metadata["sql_state"]
+    assert metadata["parser_cache"]["max_lines_in_tx_cache"] >= 0
+    assert metadata["parser_cache"]["max_lines_in_hash_cache"] >= 0
+
+
+def test_build_experiment_metadata_records_parser_cache_overrides(monkeypatch):
+    monkeypatch.setattr(em, "get_git_commit_hash", lambda: "abc123")
+    monkeypatch.setattr(em, "get_package_version", lambda package_name: None)
+
+    metadata = em.build_experiment_metadata(
+        Namespace(seed=None, parser_tx_cache_lines=0, parser_hash_cache_lines=0)
+    )
+
+    assert metadata["parser_cache"] == {
+        "max_lines_in_tx_cache": 0,
+        "max_lines_in_hash_cache": 0,
+        "tx_cache_enabled": False,
+        "blocks_hash_cache_enabled": False,
+        "tx_cache_override": 0,
+        "blocks_hash_cache_override": 0,
+    }
 
 
 def test_build_experiment_metadata_explicit_seed_overrides_args(monkeypatch):

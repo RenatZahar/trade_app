@@ -1,4 +1,5 @@
 import argparse
+import re
 
 
 EPILOG = (
@@ -7,8 +8,35 @@ EPILOG = (
     "  param-grid    - запуск подбора параметров\n"
     "\n"
     "Integration live tests:\n"
-    "  test downloaded-from-btc-data <blocks_count> [seed] - сравнение SQL-данных с повторной реконструкцией из BTC RPC\n"
+    "  test downloaded-from-btc-data <blocks_count> [seed] - сравнение случайной выборки SQL-данных с BTC RPC\n"
+    "  test downloaded-from-btc-data --blocks 873754,873755 - сравнение конкретных блоков\n"
 )
+
+
+def parse_blocks_arg(raw_blocks: list[str] | None) -> list[int] | None:
+    if raw_blocks is None:
+        return None
+
+    raw_value = " ".join(raw_blocks).strip()
+    if raw_value.startswith("blocks"):
+        raw_value = raw_value[len("blocks"):]
+    raw_value = raw_value.strip().strip("[]()")
+
+    block_values = [value for value in re.split(r"[\s,]+", raw_value) if value]
+    if not block_values:
+        raise ValueError("--blocks must contain at least one block height")
+
+    blocks = []
+    for value in block_values:
+        try:
+            block_height = int(value)
+        except ValueError as exc:
+            raise ValueError(f"Invalid block height in --blocks: {value}") from exc
+        if block_height <= 0:
+            raise ValueError("Block heights in --blocks must be greater than 0")
+        blocks.append(block_height)
+
+    return blocks
 
 
 def validate_cli_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
@@ -21,10 +49,26 @@ def validate_cli_args(parser: argparse.ArgumentParser, args: argparse.Namespace)
     if sum(active_top_level_modes) > 1:
         parser.error("Use only one top-level scenario at a time")
 
+    parser_cache_overrides = [
+        args.parser_tx_cache_lines,
+        args.parser_hash_cache_lines,
+    ]
+    if any(value is not None for value in parser_cache_overrides) and not args.start_parser:
+        parser.error("Parser cache overrides can only be used with --start_parser")
+    if any(value is not None and value < 0 for value in parser_cache_overrides):
+        parser.error("Parser cache limits must be greater than or equal to 0")
+
     if args.command == "test" and args.data_test == "downloaded-from-btc-data":
-        if args.blocks_count is None:
+        try:
+            args.blocks = parse_blocks_arg(args.blocks)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+        if args.blocks is not None and args.blocks_count is not None:
+            parser.error("Use either blocks_count or --blocks, not both")
+        if args.blocks is None and args.blocks_count is None:
             parser.error("blocks_count is required for downloaded-from-btc-data")
-        if args.blocks_count <= 0:
+        if args.blocks_count is not None and args.blocks_count <= 0:
             parser.error("blocks_count must be greater than 0")
 
 
@@ -36,6 +80,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument("-p", "--start_parser", action="store_true", help="Старт парсера блокчейна")
+    parser.add_argument(
+        "--parser-tx-cache-lines",
+        type=int,
+        help="Переопределить лимит tx_cache для парсера; 0 отключает tx_cache",
+    )
+    parser.add_argument(
+        "--parser-hash-cache-lines",
+        type=int,
+        help="Переопределить лимит blocks_hash_cache для парсера; 0 отключает blocks_hash_cache",
+    )
 
     scenario_subparsers = parser.add_subparsers(dest="command")
 
@@ -77,6 +131,7 @@ def build_parser() -> argparse.ArgumentParser:
     downloaded_btc_parser.add_argument(
         "blocks_count",
         type=int,
+        nargs="?",
         help="Сколько случайных блоков проверить",
     )
     downloaded_btc_parser.add_argument(
@@ -84,6 +139,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         nargs="?",
         help="Опциональный seed для воспроизводимой выборки",
+    )
+    downloaded_btc_parser.add_argument(
+        "--blocks",
+        nargs="+",
+        help="Конкретные блоки для проверки: 873754 или 873754,873755",
     )
 
     return parser

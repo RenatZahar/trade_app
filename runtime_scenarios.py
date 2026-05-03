@@ -1,6 +1,7 @@
 import time
 import logging
 
+from modules.blockchain_parser import async_parser_functions as apf
 from modules.blockchain_parser.parser_runtime import start_btc_core_monitor_and_parser
 from modules.bts_price_updater.runtime import update_btc_price_data
 from modules.flask_module.flask_runtime import start_flask_app
@@ -56,8 +57,17 @@ def run_param_grid_scenario(test_fraction, seed=None) -> None:
     run_param_grid(TEACHING_TEST=test_fraction, seed=seed)
 
 
-def run_parser_monitor_scenario(keep_alive: bool = True) -> None:
+def run_parser_monitor_scenario(
+    keep_alive: bool = True,
+    tx_cache_lines: int | None = None,
+    hash_cache_lines: int | None = None,
+) -> None:
     run_scenario_preflight("start_parser")
+    apf.configure_cache_limits(
+        tx_cache_lines=tx_cache_lines,
+        hash_cache_lines=hash_cache_lines,
+    )
+    logger.info("Parser cache settings: %s", apf.get_cache_metadata())
     warn_data_table_indexes_for_scenario("start_parser")
     start_btc_core_monitor_and_parser()
     if keep_alive:
@@ -65,7 +75,11 @@ def run_parser_monitor_scenario(keep_alive: bool = True) -> None:
             time.sleep(1)
 
 
-def run_downloaded_from_btc_data_scenario(blocks_count: int, seed: int | None = None):
+def run_downloaded_from_btc_data_scenario(
+    blocks_count: int | None = None,
+    seed: int | None = None,
+    blocks: list[int] | None = None,
+):
     from tests.integration_live.downloaded_from_btc_scenario import (
         run_downloaded_from_btc_data_test_scenario,
     )
@@ -75,6 +89,7 @@ def run_downloaded_from_btc_data_scenario(blocks_count: int, seed: int | None = 
     return run_downloaded_from_btc_data_test_scenario(
         blocks_count=blocks_count,
         seed=seed,
+        requested_blocks=blocks,
     )
 
 

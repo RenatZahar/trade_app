@@ -35,6 +35,28 @@ def test_parse_args_accepts_start_parser_flag():
 
     assert args.start_parser is True
     assert getattr(args, "command", None) is None
+    assert args.parser_tx_cache_lines is None
+    assert args.parser_hash_cache_lines is None
+
+
+def test_parse_args_accepts_parser_cache_overrides_with_start_parser():
+    args = cli_args.parse_args(
+        [
+            "--start_parser",
+            "--parser-tx-cache-lines",
+            "0",
+            "--parser-hash-cache-lines",
+            "0",
+        ]
+    )
+
+    assert args.parser_tx_cache_lines == 0
+    assert args.parser_hash_cache_lines == 0
+
+
+def test_parse_args_rejects_parser_cache_overrides_without_start_parser():
+    with pytest.raises(SystemExit):
+        cli_args.parse_args(["main-pipeline", "--parser-tx-cache-lines", "0"])
 
 
 def test_parse_args_rejects_legacy_service_mode():
@@ -51,6 +73,24 @@ def test_parse_args_accepts_integration_test_mode_with_blocks_and_seed():
     assert args.data_test == "downloaded-from-btc-data"
     assert args.blocks_count == 5
     assert args.seed == 13
+    assert args.blocks is None
+
+
+def test_parse_args_accepts_integration_test_mode_with_explicit_blocks():
+    args = cli_args.parse_args(
+        ["test", "downloaded-from-btc-data", "--blocks", "blocks[873754,873755]"]
+    )
+
+    assert args.command == "test"
+    assert args.data_test == "downloaded-from-btc-data"
+    assert args.blocks_count is None
+    assert args.seed is None
+    assert args.blocks == [873754, 873755]
+
+
+def test_parse_args_rejects_blocks_count_with_explicit_blocks():
+    with pytest.raises(SystemExit):
+        cli_args.parse_args(["test", "downloaded-from-btc-data", "2", "--blocks", "873754"])
 
 
 def test_parse_args_accepts_main_pipeline_command():

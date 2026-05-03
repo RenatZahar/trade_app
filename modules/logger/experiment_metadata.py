@@ -3,6 +3,7 @@ import subprocess
 from importlib import metadata
 
 from settings.paths import BASE_DIR, BLOCKS_SQL_DATA
+from settings.parser import MAX_LINES_IN_HASH_CACHE, MAX_LINES_IN_TX_CACHE
 from settings.sql import LOW_TX_WALLET_MAX_TX_COUNT, TXS_MOVED
 
 METADATA_GRID_PREVIEW_LIMIT = 5
@@ -39,6 +40,14 @@ def build_experiment_metadata(
 ) -> dict:
     args_dict = vars(args) if args is not None else {}
     effective_seed = seed if seed is not None else args_dict.get("seed")
+    tx_cache_lines = args_dict.get("parser_tx_cache_lines")
+    hash_cache_lines = args_dict.get("parser_hash_cache_lines")
+    effective_tx_cache_lines = (
+        MAX_LINES_IN_TX_CACHE if tx_cache_lines is None else tx_cache_lines
+    )
+    effective_hash_cache_lines = (
+        MAX_LINES_IN_HASH_CACHE if hash_cache_lines is None else hash_cache_lines
+    )
 
     return {
         "commit_hash": get_git_commit_hash(),
@@ -57,6 +66,14 @@ def build_experiment_metadata(
         "sql_state": {
             "txs_moved": TXS_MOVED,
             "low_tx_wallet_max_tx_count": LOW_TX_WALLET_MAX_TX_COUNT,
+        },
+        "parser_cache": {
+            "max_lines_in_tx_cache": effective_tx_cache_lines,
+            "max_lines_in_hash_cache": effective_hash_cache_lines,
+            "tx_cache_enabled": effective_tx_cache_lines > 0,
+            "blocks_hash_cache_enabled": effective_hash_cache_lines > 0,
+            "tx_cache_override": tx_cache_lines,
+            "blocks_hash_cache_override": hash_cache_lines,
         },
         "model_params": model_params,
         "grid_params": grid_params,

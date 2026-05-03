@@ -412,6 +412,13 @@ stop/resume и idempotency contract:
   - warning-only режим;
   - отдельный optional check до перевода в обязательный gate.
 
+### 12. Parser runtime hardening note
+
+- 2026-05-03 parser runtime hardening and live diagnostics are recorded in
+  [parser_runtime_hardening_2026-05-03.md](../experiments/parser_runtime_hardening_2026-05-03.md).
+- The immediate production decision is `QUANTITY_OF_BLOCKS_IN_ITERATION = 10`.
+- Deeper parser/ZMQ/lifecycle work remains future research.
+
 ## Почему это отложено
 
 - Сейчас в приоритете техническая стабилизация проекта:

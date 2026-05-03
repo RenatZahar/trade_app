@@ -39,7 +39,10 @@ if __name__ == "__main__":
         if args.start_parser:
             import runtime_scenarios as scenarios
 
-            scenarios.run_parser_monitor_scenario()
+            scenarios.run_parser_monitor_scenario(
+                tx_cache_lines=args.parser_tx_cache_lines,
+                hash_cache_lines=args.parser_hash_cache_lines,
+            )
         
         if args.command == "test":
             if args.data_test == "downloaded-from-btc-data":
@@ -48,6 +51,7 @@ if __name__ == "__main__":
                 scenarios.run_downloaded_from_btc_data_scenario(
                     blocks_count=args.blocks_count,
                     seed=args.seed,
+                    blocks=args.blocks,
                 )
                 raise SystemExit(0)
 

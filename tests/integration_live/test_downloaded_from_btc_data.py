@@ -160,6 +160,60 @@ def get_existing_block_heights_from_sql(db_path=BLOCKS_SQL_DATA) -> list[int]:
     return [int(row[0]) for row in rows]
 
 
+def get_existing_requested_block_heights_from_sql(
+    requested_blocks: list[int],
+    db_path=BLOCKS_SQL_DATA,
+) -> list[int]:
+    """Return requested Block_height values that already exist in SQL."""
+    if not requested_blocks:
+        return []
+
+    placeholders = ", ".join(["?"] * len(requested_blocks))
+    with sqlite3.connect(db_path) as conn:
+        source_tables = get_existing_sql_tables(conn, get_sql_source_tables())
+        if not source_tables:
+            return []
+
+        union_query = "\nUNION\n".join(
+            [
+                f"""
+                SELECT Block_height
+                FROM {table_name}
+                WHERE Block_height IN ({placeholders})
+                """
+                for table_name in source_tables
+            ]
+        )
+        cursor = conn.cursor()
+        cursor.execute(
+            f"""
+            SELECT DISTINCT Block_height
+            FROM (
+                {union_query}
+            )
+            ORDER BY Block_height
+            """,
+            requested_blocks * len(source_tables),
+        )
+        rows = cursor.fetchall()
+
+    return [int(row[0]) for row in rows]
+
+
+def normalize_requested_blocks(requested_blocks: list[int]) -> list[int]:
+    normalized_blocks = []
+    seen_blocks = set()
+    for block_height in requested_blocks:
+        block_height = int(block_height)
+        if block_height <= 0:
+            raise RuntimeError("requested_blocks must contain only positive block heights.")
+        if block_height in seen_blocks:
+            continue
+        normalized_blocks.append(block_height)
+        seen_blocks.add(block_height)
+    return normalized_blocks
+
+
 def ensure_bitcoin_core_ready_for_test() -> None:
     for _ in range(5):
         if get_btc_status():
@@ -570,7 +624,11 @@ def get_chain_data_for_blocks(requested_blocks):
     return normalize_records_to_compare_df(all_records)
 
 
-def run_downloaded_from_btc_data_test(blocks_count: int, seed: int | None = None) -> dict:
+def run_downloaded_from_btc_data_test(
+    blocks_count: int | None = None,
+    seed: int | None = None,
+    requested_blocks: list[int] | None = None,
+) -> dict:
     """Runtime entrypoint for the future live consistency test.
 
     The actual BTC-vs-SQL comparison logic is intentionally left for the next
@@ -586,21 +644,46 @@ def run_downloaded_from_btc_data_test(blocks_count: int, seed: int | None = None
     }
     ensure_bitcoin_core_ready_for_test()
 
-    blocks_list = get_existing_block_heights_from_sql()
+    if requested_blocks is not None:
+        requested_blocks = normalize_requested_blocks(requested_blocks)
+        if not requested_blocks:
+            raise RuntimeError("requested_blocks must contain at least one block height.")
 
-    if not blocks_list:
-        raise RuntimeError("SQL table data_table does not contain any Block_height values.")
-   
-    absent_blocks = get_absent_blocks(blocks_list)
+        existing_requested_blocks = set(
+            get_existing_requested_block_heights_from_sql(requested_blocks)
+        )
+        missing_blocks = [
+            block_height
+            for block_height in requested_blocks
+            if block_height not in existing_requested_blocks
+        ]
+        if missing_blocks:
+            raise RuntimeError(
+                "Requested blocks are not present in SQL: "
+                f"{missing_blocks}"
+            )
+        summary["selection_mode"] = "explicit_blocks"
+    else:
+        if blocks_count is None:
+            raise RuntimeError("blocks_count is required when requested_blocks is not provided.")
 
-    if absent_blocks:
-        summary["qnt_absent_blocks"] = len(absent_blocks)
-        summary["absent_blocks"] = absent_blocks
+        blocks_list = get_existing_block_heights_from_sql()
 
-    if blocks_count > len(blocks_list):
-        raise RuntimeError("blocks_list для проверки больше чем blocks_count")
+        if not blocks_list:
+            raise RuntimeError("SQL table data_table does not contain any Block_height values.")
 
-    requested_blocks = random.Random(seed).sample(blocks_list, blocks_count)
+        absent_blocks = get_absent_blocks(blocks_list)
+
+        if absent_blocks:
+            summary["qnt_absent_blocks"] = len(absent_blocks)
+            summary["absent_blocks"] = absent_blocks
+
+        if blocks_count > len(blocks_list):
+            raise RuntimeError("blocks_list для проверки больше чем blocks_count")
+
+        requested_blocks = random.Random(seed).sample(blocks_list, blocks_count)
+        summary["selection_mode"] = "random_sample"
+
     summary["requested_blocks"] = requested_blocks
     blocks_sql_data = canonicalize_sql_data_for_compare(get_sql_data_for_blocks(requested_blocks))
     summary["sql_rows_count"] = len(blocks_sql_data)

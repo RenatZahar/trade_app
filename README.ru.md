@@ -68,12 +68,19 @@ python main.py --help
 python main.py main-pipeline
 python main.py param-grid --test-fraction 0.1 --seed 42
 python main.py --start_parser
+python main.py --start_parser --parser-tx-cache-lines 0 --parser-hash-cache-lines 0
 python main.py test downloaded-from-btc-data 10 42
+python main.py test downloaded-from-btc-data --blocks 873754,873755
 ```
 
 Это live/runtime-сценарии. Они могут требовать локальные сервисы, настроенные
 пути и проектные данные. Для свежего checkout безопаснее сначала запускать
 smoke-проверку из раздела выше.
+
+Для текущего Bitcoin RPC parser flow рекомендуемый размер группы -
+`QUANTITY_OF_BLOCKS_IN_ITERATION = 10` в [`settings/parser.py`](settings/parser.py).
+Большие значения могут перегружать локальный Bitcoin Core RPC раньше, чем
+узким местом станет Python pipeline.
 
 ## Runtime-зависимости
 
