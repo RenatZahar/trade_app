@@ -412,6 +412,79 @@ stop/resume и idempotency contract:
   - warning-only режим;
   - отдельный optional check до перевода в обязательный gate.
 
+### 12. Backlog from former `docs/main_notes.md`
+
+Во время `iteration_11` старые заметки из бывшего `docs/main_notes.md` были
+пересмотрены. Часть уже закрыта итерациями 1-10, а следующие пункты остаются
+кандидатами для future development / technical debt work.
+
+#### Model and feature research
+
+- Проверить причину несходимости модели через воспроизводимое сравнение
+  current pipeline и legacy notebook pipeline, а не через разовый debug.
+- Пересмотреть семантику model/grid thresholds:
+  - `correlation_threshold`;
+  - `threshold`;
+  - `decision_threshold`;
+  - default `0.3` в correlation path.
+- Проверить, какие threshold-параметры должны жить в model config, какие в
+  grid params, а какие являются внутренними default values.
+- Изучить качество признаков вокруг:
+  - `Normalized_sell_amount`;
+  - `Normalized_buy_amount`;
+  - weighted correlations;
+  - wallet/actor-level features;
+  - реакции кошельков на price peaks.
+- Рассмотреть параметры затухания cumulative features как часть grid/model
+  config, но только после воспроизводимой artifact-based проверки.
+
+#### Analytics and access
+
+- Решить статус текущего Flask/Plotly parquet viewer:
+  - оставить внутренним debug tool;
+  - развить в model analytics dashboard;
+  - заменить отдельным reporting artifact.
+- Если делать model analytics dashboard, отдельно определить:
+  - где хранить training/profit-test DataFrames;
+  - какие artifacts можно показывать без раскрытия private strategy/data;
+  - какие сценарии запуска должны создавать эти artifacts.
+- Доступ к аналитике "по ссылке" рассматривать только после решения
+  public/private boundary, secrets и deployment/security constraints.
+
+#### Data retention and DB tooling
+
+- Продумать стратегию хранения исторических данных:
+  - что является source of truth;
+  - что можно пересчитать;
+  - что хранится как cache/artifact;
+  - что можно удалять.
+- Продумать cleanup старых runtime logs и `logs/agent_runs/*` artifacts:
+  - retention policy;
+  - ручной cleanup script или automated maintenance;
+  - что нельзя удалять до закрытия/ревью эксперимента.
+- Проверить, нужен ли отдельный maintenance metadata layer:
+  - дата последнего `ANALYZE`;
+  - дата последнего `VACUUM`;
+  - результат schema/index checks;
+  - связь с `settings/db_contracts.py`.
+- Проверить, достаточно ли текущих `sqlite3.register_adapter(...)` в parser/db
+  path или нужен единый SQLite adapter/bootstrap слой для всех DB-модулей.
+- Вернуться к вопросу отдельного DB access layer, если текущие
+  `modules/sql_funcs/*` начнут дублировать connection, PRAGMA, schema/index и
+  safety contracts.
+
+#### Parser/ZMQ notes
+
+- Сохранить как research candidate старые ZMQ-настройки:
+  - `zmqpubrawblock=tcp://127.0.0.1:28334`;
+  - `zmqpubrawtx=tcp://127.0.0.1:28335`.
+- Проверить, есть ли смысл использовать ZMQ-flow как часть parser/runtime
+  lifecycle после решения:
+  - parser restart policy;
+  - thread lifecycle policy;
+  - current Bitcoin Core monitor contract;
+  - idempotency/safe rerun behavior.
+
 ## Почему это отложено
 
 - Сейчас в приоритете техническая стабилизация проекта:

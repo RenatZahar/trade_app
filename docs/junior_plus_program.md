@@ -324,7 +324,7 @@
 - `8 - Minimal quality gate in CI: done`
 - `9 - Agentic-ready contours: done`
 - `10 - Portfolio packaging: done`
-- `11 - Notes and docs hygiene: in progress`
+- `11 - Notes and docs hygiene: done`
 - `12 - Theory review and knowledge check: planned`
 - `13 - Technical debt and next development directions: planned`
 

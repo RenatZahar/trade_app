@@ -1,7 +1,7 @@
 """Main entrypoint for local service orchestration.
 
 Operational notes and backlog for this file were moved to:
-- docs/main_notes.md
+- docs/iterations/iteration_11.md
 """
 
 from cli_args import parse_args
