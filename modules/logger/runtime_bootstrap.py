@@ -2,6 +2,7 @@ import logging
 from contextlib import contextmanager
 
 import modules.logger.logger as app_logger_module
+from modules.logger import agent_outputs
 from modules.logger.experiment_metadata import build_experiment_metadata
 from modules.logger.run_tracker import RunTracker
 
@@ -9,6 +10,7 @@ from modules.logger.run_tracker import RunTracker
 def start_runtime_logging(args):
     tracker = RunTracker(args, metadata=build_experiment_metadata(args))
     app_logger_module.setup_logging(tracker.id)
+    agent_outputs.write_manifest(tracker)
     logger = logging.getLogger("app")
     logger.warning(f"Старт main.py, прогон № {tracker.id}")
     app_logger_module.log_tracker_run_event(tracker, "run_started")
