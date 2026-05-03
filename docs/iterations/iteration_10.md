@@ -134,6 +134,40 @@ runtime/data flow; лучше оставить как следующий шаг 
 - Если влияние есть, но README сознательно откладывается, это фиксируется как
   явный follow-up и требует принятого пользователем отложения.
 
+## Текущий результат
+
+- Добавлен основной англоязычный `README.md`.
+- Добавлена русская версия `README.ru.md` с взаимной ссылкой из основного
+  README.
+- README оформлен как короткая public portfolio витрина, а не как полный
+  внутренний engineering manual.
+- Trading, Bitcoin и ML упомянуты честно: проект описан как учебный
+  engineering project, а не как production trading software.
+- Live-зависимости перечислены явно:
+  - SQLite data;
+  - Redis;
+  - Bitcoin Core / Bitcoin RPC;
+  - Flask runtime;
+  - локальные price/model/data artifacts.
+- Quickstart ограничен безопасным baseline:
+  - установка зависимостей из `requirements.lock.txt`;
+  - `python -m pytest tests\unit_smoke -q`;
+  - `python main.py --help`.
+- Runtime-сценарии отделены от безопасного smoke quickstart и помечены как
+  требующие локальных сервисов/данных.
+
+## README impact
+
+Applied: текущая итерация создала README baseline, поэтому публичные факты
+проекта теперь зафиксированы в `README.md` и `README.ru.md`.
+
+## Проверки
+
+- `python main.py --help` -> pass.
+- `python -m pytest tests\unit_smoke -q` -> `58 passed, 1 warning`.
+- Known warning: pandas `DataFrameGroupBy.apply` deprecation warning в
+  `modules/teach_and_update_models/data_operations.py`.
+
 ## Industry note (de-facto alternatives)
 
 - Выбранный подход в итерации: README-first portfolio packaging.
@@ -149,12 +183,12 @@ runtime/data flow; лучше оставить как следующий шаг 
 
 ## Definition of Done
 
-- [ ] В корне репозитория есть `README.md`.
-- [ ] README описывает project overview и architecture.
-- [ ] README содержит quickstart без секретов и live service requirements.
-- [ ] README показывает основные runtime commands или способ их посмотреть.
-- [ ] README описывает logs и machine-readable agent artifacts.
-- [ ] README фиксирует tests/CI command.
-- [ ] README честно перечисляет known limits.
-- [ ] Прогнан `python -m pytest tests\unit_smoke -q`.
-- [ ] Итог итерации обновлен в этом документе.
+- [x] В корне репозитория есть `README.md`.
+- [x] README описывает project overview и architecture.
+- [x] README содержит quickstart без секретов и live service requirements.
+- [x] README показывает основные runtime commands или способ их посмотреть.
+- [x] README описывает logs и machine-readable agent artifacts.
+- [x] README фиксирует tests/CI command.
+- [x] README честно перечисляет known limits.
+- [x] Прогнан `python -m pytest tests\unit_smoke -q`.
+- [x] Итог итерации обновлен в этом документе.
