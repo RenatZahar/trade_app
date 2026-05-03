@@ -122,6 +122,18 @@ runtime/data flow; лучше оставить как следующий шаг 
 6. Прогнать `python -m pytest tests\unit_smoke -q`, потому что docs-only
    изменение не должно ломать baseline.
 
+## Решения по процессу
+
+- При закрытии каждой будущей итерации добавлен обязательный
+  `README impact check`.
+- Если итерация меняет публично объясняемые факты проекта - CLI, runtime
+  scenarios, env/config, logs/artifacts, tests/CI, architecture, known limits
+  или roadmap - `README.md` обновляется до финального commit/merge.
+- Если влияния на README нет, в итогах итерации нужно фиксировать
+  `README impact: none`.
+- Если влияние есть, но README сознательно откладывается, это фиксируется как
+  явный follow-up и требует принятого пользователем отложения.
+
 ## Industry note (de-facto alternatives)
 
 - Выбранный подход в итерации: README-first portfolio packaging.
