@@ -5,6 +5,7 @@ import json
 import queue
 import sys
 from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
+from modules.logger import agent_outputs
 from settings.paths import BASE_DIR
 
 LOGS_DIR = BASE_DIR / "logs"
@@ -67,6 +68,9 @@ def stop_logging():
 def log_tracker_run_event(tracker, event, details=None, level=logging.INFO):
     logger = logging.getLogger(APP_LOGGER_NAME)
     tracker_data = tracker.get_run_data()
+    agent_outputs.append_run_event(tracker, event, details=details)
+    if event == "run_finished":
+        agent_outputs.write_summary(tracker)
 
     message = (
         f"_TRACKER_INFO event={event} "
@@ -90,6 +94,7 @@ def log_tracker_metadata(tracker, level=logging.INFO):
     logger = logging.getLogger(APP_LOGGER_NAME)
     tracker_data = tracker.get_run_data()
     metadata = json.dumps(tracker_data.get("metadata", {}), ensure_ascii=False, default=str)
+    agent_outputs.append_metadata_event(tracker)
     logger.log(
         level,
         f"_TRACKER_INFO event=run_metadata run_id={tracker.id} metadata={metadata}",
@@ -97,6 +102,7 @@ def log_tracker_metadata(tracker, level=logging.INFO):
 
 def log_tracker_stage_started(tracker, stage_data):
     logger = logging.getLogger(APP_LOGGER_NAME)
+    agent_outputs.append_stage_started(tracker, stage_data)
     logger.info(
         f"_TRACKER_INFO event=stage_started "
         f"run_id={tracker.id} "
@@ -107,6 +113,7 @@ def log_tracker_stage_started(tracker, stage_data):
 
 def log_tracker_stage_finished(tracker, stage_data):
     logger = logging.getLogger(APP_LOGGER_NAME)
+    agent_outputs.append_stage_finished(tracker, stage_data)
     logger.info(
         f"_TRACKER_INFO event=stage_finished "
         f"run_id={tracker.id} "
@@ -121,6 +128,7 @@ def log_tracker_stage_finished(tracker, stage_data):
 
 def log_tracker_stage_progress(tracker, details):
     logger = logging.getLogger(APP_LOGGER_NAME)
+    agent_outputs.append_stage_progress(tracker, details)
     logger.info(
         f"_TRACKER_INFO event=stage_progress "
         f"run_id={tracker.id} "

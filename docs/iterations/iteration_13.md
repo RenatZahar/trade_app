@@ -59,6 +59,31 @@ Planned
 - Набор промежуточных файлов-артефактов по ключевым шагам.
 - Документированный diff-процесс: где смотреть расхождения и как локализовать шаг, на котором пайплайны разошлись.
 
+### 1.1 Agentic stop/resume contract после переделки data-flow
+
+После переделки способа сбора данных для `main-pipeline` отдельно вернуться к
+stop/resume и idempotency contract:
+
+- определить, какие шаги `main-pipeline` можно безопасно повторять;
+- определить, какие шаги должны переиспользовать готовые artifacts;
+- зафиксировать, когда нужен новый `run_id`, а когда допустимо продолжение
+  существующего logical run;
+- описать, что происходит при остановке после каждого дорогого шага:
+  data collection, feature/correlation data, clean data, train, evaluate,
+  save model;
+- связать этот контракт с `logs/agent_runs/<run_id>/manifest.json`,
+  `events.jsonl` и `summary.json`;
+- не реализовывать полноценный resume до стабилизации data collection/artifact
+  layer.
+
+Отдельно, более низким приоритетом, проработать stop/resume для `param-grid`:
+
+- решить, какие parquet artifacts являются валидным cache;
+- определить, как проверять соответствие cache текущим grid params/time params;
+- описать поведение при остановке worker-пула;
+- решить, нужен ли resume отдельных grid combinations или достаточно
+  безопасного повторного запуска всего сценария.
+
 ### 2. Проверка расхождений в data consistency test вокруг `Btc_block_time_price`
 
 - Прогнать live-тест на соответствие SQL-данных и повторной BTC-реконструкции.

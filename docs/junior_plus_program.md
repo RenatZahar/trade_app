@@ -322,7 +322,7 @@
 - `6 - Determinism and experiment control: done`
 - `7 - Module responsibility boundaries: done`
 - `8 - Minimal quality gate in CI: done`
-- `9 - Agentic-ready contours: planned`
+- `9 - Agentic-ready contours: done`
 - `10 - Portfolio packaging: planned`
 - `11 - Notes and docs hygiene: planned`
 - `12 - Theory review and knowledge check: planned`
