@@ -47,7 +47,7 @@
 1. `data-pipeline-safety-check` - главный обязательный skill для опасных данных.
 2. `discuss-plan-execute` - способ не начинать крупную задачу с кода.
 3. `review-python-module` - зафиксирован заранее, чтобы не забыть режим ревью без правок.
-4. `iteration-workflow` - правила работы с `docs/iterations`, ветками итераций, финализацией, merge и созданием следующей ветки.
+4. `iteration-workflow` - правила работы с `docs/iterations`, ветками итераций, финализацией, README impact check, merge и созданием следующей ветки.
 5. `experiment-protocol` - правила изоляции, измерения, сравнения, фиксации решения и уборки experimental-кода.
 
 ### `docs/agents_skills_translate_ru.md`
@@ -105,6 +105,12 @@
 - обновления цели, контекста, DoD и итогов итерации;
 - финализации итерации: tests, commit, push, merge в `main_branch`;
 - создания следующей ветки.
+
+При закрытии итерации skill теперь требует `README impact check`: если менялись
+публичные команды, конфиг, runtime-сценарии, логи/artifacts, тесты/CI,
+архитектура, known limits или roadmap, `README.md` нужно обновить до финального
+commit/merge. Если влияния нет, это фиксируется в файле итерации как
+`README impact: none`.
 
 Это не нужно держать целиком в `AGENTS.md`, потому что процесс длинный и нужен не для каждой задачи.
 

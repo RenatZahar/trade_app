@@ -323,7 +323,7 @@
 - `7 - Module responsibility boundaries: done`
 - `8 - Minimal quality gate in CI: done`
 - `9 - Agentic-ready contours: done`
-- `10 - Portfolio packaging: planned`
+- `10 - Portfolio packaging: done`
 - `11 - Notes and docs hygiene: planned`
 - `12 - Theory review and knowledge check: planned`
 - `13 - Technical debt and next development directions: planned`
@@ -406,6 +406,25 @@ git push
   GitHub Quality Gate на финальном pushed commit;
 - если GitHub Quality Gate падает, нужно внести fix-коммит, снова push и снова
   дождаться зеленого run.
+
+Перед финальным commit/merge каждой итерации обязательно делать
+`README impact check`.
+
+Проверить, изменились ли публично объясняемые факты проекта:
+
+- команды запуска, CLI flags и runtime scenarios;
+- env/config requirements;
+- структура логов или machine-readable agent artifacts;
+- тесты, CI-команды и quality gate;
+- верхнеуровневая архитектура;
+- known limits;
+- roadmap и next steps.
+
+Если impact есть, `README.md` обновляется в этой же итерации до финального
+commit/merge. Если impact нет, в итогах `docs/iterations/iteration_<N>.md`
+фиксируется `README impact: none`. Если impact есть, но README сознательно
+откладывается, это нужно записать как явный follow-up; такая итерация считается
+полностью закрытой только если пользователь принял это отложение.
 
 ### Быстрый протокол безопасной синхронизации (если есть локальные правки и ветка behind)
 

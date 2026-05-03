@@ -44,14 +44,19 @@ Read:
 ## Closing an Iteration
 
 1. Update the iteration document with final results, checks, known warnings, and remaining follow-up.
-2. Run the narrowest relevant verification. For broad runtime/CLI/logging/ML changes, use:
+2. Run a README impact check before the final commit:
+   - check whether the iteration changed public-facing project facts such as CLI commands, runtime scenarios, env/config requirements, logs/artifacts, tests/CI, high-level architecture, known limits, or roadmap;
+   - if there is impact, update `README.md` in the same iteration before closing;
+   - if there is no impact, record `README impact: none` in the iteration document;
+   - if there is impact but README is intentionally deferred, record an explicit follow-up and do not treat the iteration as fully closed unless the user accepts the deferral.
+3. Run the narrowest relevant verification. For broad runtime/CLI/logging/ML changes, use:
    - `python -m pytest tests\unit_smoke -q`
-3. Check `git status -sb` and review the staged scope before committing.
-4. Commit with a terse iteration-focused message.
-5. Push the feature branch.
-6. Merge into `main_branch` only when requested or clearly part of the user's requested closeout.
-7. Push `main_branch`.
-8. Create and push the next iteration branch when requested.
+4. Check `git status -sb` and review the staged scope before committing.
+5. Commit with a terse iteration-focused message.
+6. Push the feature branch.
+7. Merge into `main_branch` only when requested or clearly part of the user's requested closeout.
+8. Push `main_branch`.
+9. Create and push the next iteration branch when requested.
 
 ## Branch and Merge Rules
 
