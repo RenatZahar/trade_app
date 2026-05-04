@@ -176,6 +176,16 @@
   - явную политику по small-block exclusions и `vin` gap diagnostics;
   - перенос performance-идей в isolated experiments вместо изменений здорового parser run.
 
+### 14) Main ML pipeline correctness (P1)
+**Junior+ умеет:** отличать результат модели от артефакта несовпадающих train/predict contracts.
+
+- Что внедряем:
+  - единый preprocessing contract для train и predict;
+  - явный feature schema contract и защиту от случайного `index` leakage;
+  - корректные timestamp range filters и проверку alignment;
+  - единый контракт для `threshold` / `decision_threshold`;
+  - focused tests вокруг исправленных ML pipeline contracts.
+
 
 ---
 
@@ -317,6 +327,7 @@
 - `11 - Notes and docs hygiene: done / archived`
 - `12 - Theory review and knowledge check: deferred`
 - `13 - Parser backfill stability: done with follow-ups`
+- `14 - Main ML pipeline correctness: started`
 
 Большой план будущего развития не занимает номер итерации и хранится в
 `docs/future_development_backlog.md`; текущий порядок выполнения - в

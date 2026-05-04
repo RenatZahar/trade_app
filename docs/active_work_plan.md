@@ -30,6 +30,8 @@ As of 2026-05-04:
   Parser run `95` was stopped manually after successfully processing
   `875683-877672`; run `96` verified sample blocks `877663`, `877668`, and
   `877672` through SQL-vs-BTC comparison with `all_blocks_identical`.
+- Iteration `14 - Main ML pipeline correctness` is opened on branch
+  `feature/iteration-14-main-pipeline-correctness`.
 - The former broad ML/trading validation scope is kept in this file as the
   follow-up roadmap, not as a single oversized iteration.
 
@@ -52,7 +54,8 @@ Near-term parser follow-ups:
 
 ### 2. Fix Main ML Pipeline Correctness
 
-This is the next focused iteration after parser backfill stability closeout.
+This is the active focused iteration after parser backfill stability closeout.
+Detailed start document: `docs/iterations/iteration_14.md`.
 
 Fix before trusting model results:
 
