@@ -25,8 +25,9 @@ As of 2026-05-04:
   engineering work.
 - Iteration `13 - Next development directions` is a backlog container for
   technical debt and architecture directions.
-- Iteration `14 - ML pipeline correctness and trading validation` is the current
-  main practical track.
+- Iteration `14 - Parser backfill stability` is the current active iteration.
+- The former broad ML/trading validation scope is kept in this file as the
+  follow-up roadmap, not as a single oversized iteration.
 
 ## Current Priority Order
 
@@ -46,7 +47,8 @@ Near-term parser follow-ups:
 
 ### 2. Fix Main ML Pipeline Correctness
 
-This is the first active engineering priority from `iteration_14`.
+This should become the next focused iteration after parser backfill stability is
+closed or intentionally paused.
 
 Fix before trusting model results:
 
@@ -61,6 +63,29 @@ Expected validation:
 - focused unit/smoke tests around the fixed contracts;
 - rerun known model/profit-test scenarios only after these fixes.
 
+Detailed backlog from the earlier broad plan:
+
+- Check and fix train/predict preprocessing:
+  - training currently uses `StandardScaler().fit_transform(...)`;
+  - profit-test can call `model.predict(...)` on raw features;
+  - target shape is `sklearn Pipeline(StandardScaler(), ElasticNet())` or
+    saving/applying the same scaler with the model.
+- Remove accidental `index` from model features unless explicitly justified.
+- Add feature schema contract:
+  - model columns;
+  - service columns;
+  - missing/extra column behavior.
+- Fix timestamp filters such as `Timestamp >= start & Timestamp <= end` by
+  wrapping each condition in parentheses.
+- Review `merge_asof(..., direction='nearest')` and decide whether explicit
+  tolerance or `calculate_in_10_min_period` is required.
+- Confirm train/test windows do not overlap through labels or derived
+  artifacts.
+- Decide the target contract: `Action` {-1, 0, 1}, future return, signal score,
+  or another target.
+- Verify regression on `Action` is the right model shape or compare with
+  classifier/ranking/regime detector alternatives.
+
 ### 3. Make Profit-Test Results Trustworthy
 
 After ML contract fixes:
@@ -70,6 +95,49 @@ After ML contract fixes:
 - include fees, spread/slippage, and execution delay at least in minimal form;
 - report drawdown, exposure, turnover, trade count, profit factor, and PnL;
 - run several walk-forward windows before treating a result as evidence.
+
+Detailed backlog from the earlier broad plan:
+
+- Check that `Predicted_Action` creates real trading behavior and not a hidden
+  all-cash mode.
+- Report max drawdown, exposure, turnover, trade count, profit factor, PnL and
+  baseline comparisons.
+- Run at least 5 walk-forward windows, preferably 5-10, before trusting a
+  result.
+- Mark older `7%` / `17%` results as legacy/unverified until reproduced under
+  the corrected protocol.
+
+### 3.1 Feature Audit and Model Signal Review
+
+Do this after the correctness and profit-test contract are fixed.
+
+Backlog:
+
+- Audit weighted buy/sell correlations, anti-correlations, `SASI-SABI`,
+  `BABI-BASI`, EWM/CMLTV variants.
+- Run ablation:
+  - without `index`;
+  - only raw weighted correlations;
+  - only CMLTV/EWM features;
+  - without suspicious or unstable features.
+- Check coefficient/feature importance stability across windows.
+- Decide whether to add OHLCV, volatility regime, funding, open interest,
+  order book, exchange flow, or entity-level enrichment.
+
+### 3.2 Parser Data Contract for Model Use
+
+This connects parser data quality to ML trust.
+
+Backlog:
+
+- Make model pipeline aware of parser exclusions:
+  - coinbase transactions;
+  - no-address prev outputs;
+  - outputs below `MIN_VALUE_THRESHOLD`;
+  - intentionally excluded small blocks, if any.
+- Keep SQL-vs-BTC consistency checks as evidence before model retraining.
+- Do not start bulk data repair or backfill migrations without the SQLite/data
+  safety design review.
 
 ### 4. Optimize DB Data Collection
 

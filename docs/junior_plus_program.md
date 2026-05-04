@@ -191,14 +191,14 @@
     или другой честный формат разделения strategy logic и public infrastructure;
   - постепенное введение lint без обязательного lint всего проекта на старте.
 
-### 14) ML pipeline correctness and trading validation (P1/P2)
-**Junior+ умеет:** отличать реальный trading edge от ошибок пайплайна, leakage, некорректного backtest и неучтенных издержек.
+### 14) Parser backfill stability (P1)
+**Junior+ умеет:** вести долгий production-like data backfill без потери контекста, скрытых data gaps и преждевременных рискованных оптимизаций.
 
 - Что внедряем:
-  - исправление ML train/predict contract: единый preprocessing, feature schema, отсутствие случайных служебных признаков;
-  - проверку временных фильтров, target contract и threshold naming;
-  - честный profit-test с baseline comparisons, costs, exposure, turnover, drawdown и trade count;
-  - walk-forward проверку на нескольких окнах перед выводом о пригодности стратегии.
+  - мониторинг parser backfill по stage wall-clock, последнему сохраненному блоку и ошибкам;
+  - sample SQL-vs-BTC consistency checks для подтверждения качества данных;
+  - явную политику по small-block exclusions и `vin` gap diagnostics;
+  - перенос performance-идей в isolated experiments вместо изменений здорового parser run.
 
 
 ---
@@ -341,7 +341,7 @@
 - `11 - Notes and docs hygiene: done / archived`
 - `12 - Theory review and knowledge check: deferred`
 - `13 - Technical debt and next development directions: backlog / planned`
-- `14 - ML pipeline correctness and trading validation: active`
+- `14 - Parser backfill stability: active`
 
 Обновлять статусы после каждой завершенной итерации.
 
