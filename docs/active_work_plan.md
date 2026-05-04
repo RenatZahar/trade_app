@@ -26,7 +26,10 @@ As of 2026-05-04:
 - `docs/future_development_backlog.md` is the backlog container for technical
   debt and architecture directions. It was intentionally moved out of
   `docs/iterations/` because it is a plan, not a closeable iteration.
-- Iteration `13 - Parser backfill stability` is the current active iteration.
+- Iteration `13 - Parser backfill stability` is closed as `Done with follow-ups`.
+  Parser run `95` was stopped manually after successfully processing
+  `875683-877672`; run `96` verified sample blocks `877663`, `877668`, and
+  `877672` through SQL-vs-BTC comparison with `all_blocks_identical`.
 - The former broad ML/trading validation scope is kept in this file as the
   follow-up roadmap, not as a single oversized iteration.
 
@@ -34,8 +37,9 @@ As of 2026-05-04:
 
 ### 1. Keep Parser Backfill Stable
 
-The blockchain parser is catching up historical blocks. Avoid changing parser
-runtime behavior while a long run is healthy unless there is a clear failure or
+Parser backfill stability is closed enough to move on, but remains an
+operational follow-up when parser runs resume. Avoid changing parser runtime
+behavior while a long run is healthy unless there is a clear failure or
 data-loss risk.
 
 Near-term parser follow-ups:
@@ -48,8 +52,7 @@ Near-term parser follow-ups:
 
 ### 2. Fix Main ML Pipeline Correctness
 
-This should become the next focused iteration after parser backfill stability is
-closed or intentionally paused.
+This is the next focused iteration after parser backfill stability closeout.
 
 Fix before trusting model results:
 

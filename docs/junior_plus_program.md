@@ -316,7 +316,7 @@
 - `10 - Portfolio packaging: done`
 - `11 - Notes and docs hygiene: done / archived`
 - `12 - Theory review and knowledge check: deferred`
-- `13 - Parser backfill stability: active`
+- `13 - Parser backfill stability: done with follow-ups`
 
 Большой план будущего развития не занимает номер итерации и хранится в
 `docs/future_development_backlog.md`; текущий порядок выполнения - в

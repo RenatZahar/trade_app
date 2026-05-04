@@ -8,6 +8,29 @@ from modules.logger import timing
 from modules.logger import run_tracker
 
 
+def test_build_parser_progress_snapshot_uses_recent_groups_for_speed_and_eta():
+    snapshot = main_parser._build_parser_progress_snapshot(
+        last_range="101-110",
+        processed_blocks=20,
+        remaining_blocks=30,
+        recent_groups=[
+            {"blocks": 10, "duration_sec": 60},
+            {"blocks": 10, "duration_sec": 60},
+        ],
+    )
+
+    assert snapshot == {
+        "last_range": "101-110",
+        "processed_blocks": 20,
+        "remaining_blocks": 30,
+        "recent_groups_count": 2,
+        "recent_blocks": 20,
+        "recent_duration_sec": 120,
+        "recent_blocks_per_min": 10,
+        "eta": "00:03:00",
+    }
+
+
 def test_parser_finishes_non_empty_block_stage_once(monkeypatch):
     monkeypatch.setattr(run_tracker, "get_init_number", lambda: 700)
     run_tracker.RunTracker(Namespace(start_parser=True))

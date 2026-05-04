@@ -7,7 +7,7 @@
 
 ## Статус
 
-Active
+Done with follow-ups
 
 ## Дата старта
 
@@ -122,6 +122,116 @@ Active
 - `vin` warnings имеют documented classification для проверенного sample.
 - Оставшиеся parser performance идеи перенесены в isolated experiment backlog.
 - README impact check выполнен перед закрытием итерации.
+
+## Итоговый closeout
+
+Дата closeout: 2026-05-04.
+
+### Operational status
+
+- Основной backfill run: `95`.
+- Статус run: `interrupted` - parser был остановлен вручную.
+- Время run: `2026-05-04 06:17:19` - `2026-05-04 13:45:26`.
+- Длительность: `07:28:07`.
+- На старте run было рассчитано `blocks_to_download=72127`.
+- Успешно обработанные группы: `199` групп по `10` блоков.
+- Успешно обработанный диапазон: `875683-877672`.
+- Последний сохраненный блок в `data_table`: `877672`.
+- Общая stage wall-clock скорость по успешным группам:
+  `1990` blocks / `26814.23` sec = около `4.45` blocks/min.
+- Скорость по последним 10 успешным группам:
+  `100` blocks / `544.43` sec = около `11.02` blocks/min.
+- Последние 10 успешных диапазонов:
+  `877573-877582`, `877583-877592`, `877593-877602`,
+  `877603-877612`, `877613-877622`, `877623-877632`,
+  `877633-877642`, `877643-877652`, `877653-877662`,
+  `877663-877672`.
+
+Operational note:
+
+- `logs/agent_runs/700/events.jsonl` не является реальным parser run. Это
+  тестовый артефакт от `tests/unit_smoke/test_main_parser.py`, где run id
+  подменяется на `700`; у него нет `manifest.json` и `summary.json`.
+
+### SQL-vs-BTC sample check
+
+Проверка выполнена через:
+
+```bash
+python main.py test downloaded-from-btc-data --blocks 877663,877668,877672
+```
+
+Результат run `96`:
+
+- status: `success`;
+- comparison_status: `all_blocks_identical`;
+- requested_blocks: `877663`, `877668`, `877672`;
+- sql_rows_count: `30053`;
+- chain_rows_count: `30053`;
+- identical_blocks_count: `3`;
+- non_identical_blocks_count: `0`;
+- diagnostics_rows_count: `0`;
+- only_in_sql_rows_count: `0`;
+- only_in_btc_rows_count: `0`.
+
+Вывод: для проверенных sample-блоков SQL-данные совпали с независимой
+BTC-реконструкцией. `vin` diagnostics не блокируют closeout, потому что в
+проверенном sample diagnostics пустые.
+
+### Small-block exclusion policy
+
+В этой итерации принято консервативное решение:
+
+- не добавлять fake rows в `data_table`;
+- не создавать отдельную service-таблицу под факт попытки скачивания small
+  blocks;
+- считать small-block exclusions явным parser data contract для текущего
+  production path;
+- не менять runtime-поведение parser во время здорового backfill.
+
+Причина: `data_table` хранит transaction/wallet rows, а не факт посещения
+блока. Fake row исказила бы смысл таблицы, а новая service-сущность добавила бы
+обязательство учитывать ее во всех downstream-контрактах.
+
+Long-term follow-up: если понадобится строгий contiguous block-status contract,
+проектировать его отдельно как service metadata / experiment, а не как
+неявную строку в `data_table`.
+
+### Parser performance ideas
+
+Performance-идеи не внедрялись в production parser path в рамках closeout.
+Они остаются isolated experiment backlog:
+
+- Bitcoin Core parser-only config profile;
+- `rpcthreads` / `rpcworkqueue` / `dbcache` sweep;
+- async RPC chunking/concurrency limits;
+- experimental `getblock` verbosity `2/3` path instead of many
+  `getrawtransaction` calls.
+
+Текущее production-решение остается `QUANTITY_OF_BLOCKS_IN_ITERATION = 10`.
+
+### Parser progress logging
+
+Перед финальным closeout добавлена краткая INFO-строка `PARSER_PROGRESS` после
+каждой успешно сохраненной группы. Она показывает последний диапазон,
+processed/remaining blocks, скорость по rolling window успешных групп и ETA.
+Verbose `PARSER_TIMING` logs остаются для debug.
+
+### README impact check
+
+README impact: none.
+
+Причина: closeout не менял публичные CLI-команды, runtime-сценарии,
+env/config requirements, high-level architecture или documented quickstart.
+Итерация зафиксировала operational status, sample data-quality result и
+parser data-contract решение.
+
+### Remaining follow-ups
+
+- Если unit tests снова создают реальные `logs/agent_runs/*` артефакты,
+  изолировать logger outputs в temp dir внутри тестов.
+- При следующей parser остановке повторять narrow SQL-vs-BTC sample check на
+  свежем хвосте диапазона.
 
 ## Out of scope
 
