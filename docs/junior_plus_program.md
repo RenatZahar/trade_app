@@ -64,7 +64,7 @@
 
 ---
 
-## Дорожная карта (13 итераций)
+## Дорожная карта (14 итераций)
 
 ### 1) Reproducible run: единая точка запуска и профили окружения (P0)
 **Junior+ умеет:** запускать проект одинаково на любой машине по инструкции и конфигам.
@@ -185,6 +185,15 @@
   - решение по public/private boundary: demo-заглушка, private package/core repo
     или другой честный формат разделения strategy logic и public infrastructure;
   - постепенное введение lint без обязательного lint всего проекта на старте.
+
+### 14) ML pipeline correctness and trading validation (P1/P2)
+**Junior+ умеет:** отличать реальный trading edge от ошибок пайплайна, leakage, некорректного backtest и неучтенных издержек.
+
+- Что внедряем:
+  - исправление ML train/predict contract: единый preprocessing, feature schema, отсутствие случайных служебных признаков;
+  - проверку временных фильтров, target contract и threshold naming;
+  - честный profit-test с baseline comparisons, costs, exposure, turnover, drawdown и trade count;
+  - walk-forward проверку на нескольких окнах перед выводом о пригодности стратегии.
 
 
 ---
@@ -327,6 +336,7 @@
 - `11 - Notes and docs hygiene: planned`
 - `12 - Theory review and knowledge check: planned`
 - `13 - Technical debt and next development directions: planned`
+- `14 - ML pipeline correctness and trading validation: planned`
 
 Обновлять статусы после каждой завершенной итерации.
 
