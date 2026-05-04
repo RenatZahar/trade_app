@@ -66,6 +66,11 @@
 
 ## Дорожная карта (14 итераций)
 
+Текущий порядок работ и временно отложенные темы фиксируются в
+`docs/active_work_plan.md`. Этот roadmap остается общей программой и историей
+итераций, но не должен использоваться как единственный источник текущего
+приоритета.
+
 ### 1) Reproducible run: единая точка запуска и профили окружения (P0)
 **Junior+ умеет:** запускать проект одинаково на любой машине по инструкции и конфигам.
 
@@ -333,10 +338,10 @@
 - `8 - Minimal quality gate in CI: done`
 - `9 - Agentic-ready contours: done`
 - `10 - Portfolio packaging: done`
-- `11 - Notes and docs hygiene: planned`
-- `12 - Theory review and knowledge check: planned`
-- `13 - Technical debt and next development directions: planned`
-- `14 - ML pipeline correctness and trading validation: planned`
+- `11 - Notes and docs hygiene: done / archived`
+- `12 - Theory review and knowledge check: deferred`
+- `13 - Technical debt and next development directions: backlog / planned`
+- `14 - ML pipeline correctness and trading validation: active`
 
 Обновлять статусы после каждой завершенной итерации.
 

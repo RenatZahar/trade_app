@@ -3,6 +3,9 @@
 ## Context First
 
 - Before non-trivial work, inspect `docs/` and the relevant files inside it.
+- Treat `docs/active_work_plan.md` as the current short-term work selector:
+  read it after `docs/junior_plus_program.md` to understand what is active,
+  deferred, and next.
 - Treat `docs/maintenance_guidelines.md` as the source of truth for SQLite, bulk data, index, and maintenance work.
 - Treat `docs/junior_plus_program.md` and `docs/iterations/` as project process and roadmap context.
 - Check `git status` before editing. Never revert or overwrite user changes unless explicitly requested.
