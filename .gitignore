@@ -20,6 +20,7 @@ env/
 .ipynb_checkpoints/
 
 # Ignore logs and temporary files
+logs/
 *.log
 *.tmp
 
