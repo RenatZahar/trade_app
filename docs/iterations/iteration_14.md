@@ -408,6 +408,46 @@ Scope Phase 1:
   исправленной;
 - не трогать scaler, schema, threshold и `merge_asof` в этом коммите.
 
+#### Phase 1 implementation blocker - ignored production file
+
+При начале Phase 1 обнаружено, что целевой файл
+`modules/teach_and_update_models/data_operations.py` не отслеживается Git и
+попадает под правило `.gitignore:46:data_operations.py`.
+
+Проверки:
+
+```bash
+git ls-files -v modules\teach_and_update_models\data_operations.py
+# no output
+
+git check-ignore -v modules\teach_and_update_models\data_operations.py
+# .gitignore:46:data_operations.py
+```
+
+Почему это важно:
+
+- timestamp bug находится именно в этом файле;
+- обычный `git status` не показывает изменения в ignored файле;
+- локальная правка может пройти локальный тест, но не попадет в commit/push;
+- `git add -f` мог бы force-track файл, но это нельзя делать молча, потому что
+  файл выглядит как legacy/production strategy logic, специально исключенная из
+  публичного/обычного Git scope.
+
+Текущее решение:
+
+- скрытая локальная пробная правка в ignored файле была убрана;
+- Phase 1 не продолжается как code patch до выбора политики для
+  `data_operations.py`;
+- безопасные варианты:
+  1. force-track конкретный `data_operations.py`, если его допустимо хранить в
+     репозитории;
+  2. оставить файл private/local и применять Phase 1 как локальный patch без
+     Git-фиксации, явно понимая риск невоспроизводимости;
+  3. вынести минимальный tracked compatibility layer/helper в отслеживаемый
+     модуль и затем вручную подключить его в private `data_operations.py`;
+  4. отложить Phase 1 code patch и сначала решить статус ignored production
+     ML/data files.
+
 ### Phase 1 - Timestamp filter correctness
 
 Что:
