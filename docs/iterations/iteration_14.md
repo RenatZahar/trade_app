@@ -188,6 +188,226 @@ profit-test и model comparison результаты можно было тра�
   code patch.
 - Решение: какие пункты точно правим, какие оставляем follow-up.
 
+### Phase 0 diagnosis - 2026-05-04
+
+Статус: completed as docs-only diagnostics. Pipeline-код не менялся.
+
+#### Current train -> predict -> profit-test flow
+
+1. CLI entrypoint:
+   - `main.py:25-29` обрабатывает команду `main-pipeline`;
+   - вызывает `runtime_scenarios.prepare_training_data_and_train_new_model()`;
+   - runtime logging стартует до сценария через `start_runtime_logging(args)`.
+2. Scenario layer:
+   - `runtime_scenarios.py:40-49` делает preflight, warning по индексам,
+     стартует Flask, обновляет BTC price data, обновляет peaks и вызывает
+     `train_new_model_from_json(TEACHING_TEST=0)`;
+   - это значит, что реальный `main-pipeline` перед ML-частью имеет внешние
+     side effects. В рамках первых correctness patches не трогаем эти шаги.
+3. Model config loading:
+   - `training_entrypoints.py:29-41` форматирует JSON в `data/models/new_models`,
+     берет первый не-example файл через `check_for_new_models()` и передает
+     `model_info` в `teach_model(...)`;
+   - текущий рабочий файл `data/models/new_models/model copy 5.json` содержит
+     `decision_threshold`, а example/param-grid configs содержат `threshold`.
+4. Orchestration:
+   - `orchestrator.py:26-101` на каждую временную итерацию:
+     - строит `model.tmsps_data`;
+     - вызывает `do.get_corelation_by_tmsp_df(...)`;
+     - применяет `do.clean_data(...)` к train и profit-test DataFrame;
+     - вызывает `model.train_model_specific(...)`;
+     - отдельно вызывает `model.calculate_total_value(...)`;
+     - сохраняет model/profit artifacts.
+5. Data preparation:
+   - `data_operations.py:127-161` собирает wallets/correlations/features и в
+     конце делает `reset_index(inplace=True)` для train и profit-test frames;
+   - из-за этого появляется обычная колонка `index`, которая дальше не
+     удаляется `clean_data(...)`.
+6. Feature cleanup:
+   - `data_operations.py:858-890` удаляет service columns вроде `Timestamp`,
+     `Block_time`, `Nearest_tmps_from_learning_data`, но не удаляет `index`;
+   - значит `index` становится candidate model feature в train и predict.
+7. Model fit:
+   - `model_classes.py:197-204` создает raw `ElasticNet`, вручную делает
+     `StandardScaler().fit_transform(...)`, затем превращает scaled array назад
+     в DataFrame;
+   - `model_classes.py:259-264` обучает raw `ElasticNet` уже на scaled DataFrame;
+   - scaler не сохраняется на `self`, не попадает в saved model artifact и не
+     применяется в profit-test predict.
+8. Predict/profit-test:
+   - `model_classes.py:140-189` берет `self.model`, делает
+     `data.drop(columns=['Action', 'Price', 'Predicted_Action'])` и вызывает
+     `model.predict(data_copy)`;
+   - этот `data_copy` не проходит тот же scaler;
+   - feature schema не проверяется, хотя рядом уже есть warning/comment с
+     идеей `feature_names_in_`;
+   - `data_copy_for_predictions.parquet` и `data_after_predictions.parquet`
+     пишутся в текущую директорию модуля, потому что module import делает
+     `os.chdir(script_dir)`.
+
+#### Confirmed findings
+
+1. Timestamp filter precedence bug.
+
+   Текущие участки:
+
+   - `data_operations.py:634-637`;
+   - `data_operations.py:737-740`.
+
+   Форма:
+
+   ```python
+   data_for_teach_df['Timestamp'] >= teaching_start_tmsp &
+   (data_for_teach_df['Timestamp'] <= teaching_end_tmsp)
+   ```
+
+   Почему это опасно:
+
+   - `&` применяется не как логическое "между двумя условиями", а внутри правой
+     части comparison;
+   - на минимальном примере ожидаемая маска `[False, True, False]` превращается
+     в `[True, True, True]`;
+   - это может расширять train window и незаметно менять выборку.
+
+   Диагностический snippet:
+
+   ```python
+   correct = (df["Timestamp"] >= start) & (df["Timestamp"] <= end)
+   current = df["Timestamp"] >= start & (df["Timestamp"] <= end)
+   # correct -> [False, True, False]
+   # current -> [True, True, True]
+   ```
+
+   Решение: Phase 1 должна исправить только эти filters и добавить focused
+   unit test на маленьком DataFrame.
+
+2. Accidental `index` feature leakage.
+
+   Текущие участки:
+
+   - `data_operations.py:158-159` добавляет колонку `index`;
+   - `data_operations.py:858-890` не удаляет `index`;
+   - `model_classes.py:201-204` обучает модель на всех колонках кроме
+     `Action`, `Price`;
+   - `model_classes.py:150` predict/profit-test также оставляет `index`.
+
+   Почему это опасно:
+
+   - `index` не является рыночным/поведенческим признаком;
+   - он зависит от порядка формирования DataFrame и parquet/load/reset path;
+   - модель может получить ложный сигнал, который не переносится между runs.
+
+   Диагностический snippet:
+
+   ```python
+   raw.reset_index(inplace=True)
+   raw.drop(columns=["Action", "Price"]).columns.tolist()
+   # ["index", "Timestamp", "feature"]
+   ```
+
+   Решение: Phase 2 должна ввести минимальный feature schema helper и явно
+   исключить `index`.
+
+3. Train/predict preprocessing mismatch.
+
+   Текущие участки:
+
+   - `model_classes.py:200-204` fit path делает `StandardScaler().fit_transform`;
+   - `model_classes.py:264` fit raw `ElasticNet` на scaled `X_train`;
+   - `model_classes.py:154` predict path вызывает raw `model.predict(data_copy)`.
+
+   Почему это опасно:
+
+   - model coefficients обучены на standardized scale;
+   - profit-test подает raw scale;
+   - результат может быть численно валидным, но логически неправильным;
+   - saved artifact через `save_model()` сохраняет только raw model, не scaler.
+
+   Решение: Phase 3 предпочитает `sklearn Pipeline(StandardScaler(), ElasticNet)`.
+   Если это окажется слишком большим вмешательством, fallback - `self.scaler`
+   plus explicit transform. До Phase 3 старые profit-test results считаются
+   legacy/unverified.
+
+4. `threshold` / `decision_threshold` contract drift.
+
+   Текущие участки:
+
+   - `model_classes.py:145` profit-test читает `threshold`;
+   - `model_classes.py:229` и `259` фильтруют только `decision_threshold` перед
+     `ElasticNet.set_params(...)`;
+   - `model_classes.py:242`, `269`, `286` train metrics используют
+     `decision_threshold`;
+   - `data/models/new_models/model copy 5.json` содержит `decision_threshold`;
+   - `data/models/new_models/example tmps.json` и `data/param_grids/new_grids`
+     используют `threshold`.
+
+   Почему это опасно:
+
+   - текущий single-model JSON с `decision_threshold` проходит set_params filter,
+     но profit-test может упасть на `self.model_parameters['threshold']`;
+   - param-grid JSON с `threshold` может передать `threshold` в
+     `ElasticNet.set_params(...)`, где такого параметра нет;
+   - metrics и profit-test могут использовать разные threshold sources.
+
+   Диагностический snippet:
+
+   ```python
+   ElasticNet().set_params(alpha=1.0, l1_ratio=0.5, threshold=0.2)
+   # ValueError: Invalid parameter 'threshold' for estimator ElasticNet()
+   ```
+
+   Решение: Phase 4 должна выбрать canonical key. Предварительное решение:
+   canonical internal key = `decision_threshold`, old `threshold` принимается
+   только через явный compatibility adapter.
+
+5. Debug/runtime artifact writes in predict path.
+
+   Текущие участки:
+
+   - `model_classes.py:151` пишет `data_copy_for_predictions.parquet`;
+   - `model_classes.py:170` пишет `data_after_predictions.parquet`;
+   - `model_classes.py:38` делает `os.chdir(script_dir)`, поэтому файлы пишутся
+     в модульную директорию, а не в run-specific artifact directory.
+
+   Почему это опасно:
+
+   - это может перетирать debug artifacts между runs;
+   - это мешает понять, к какому run относится parquet;
+   - но это не первичный correctness bug относительно scaler/schema.
+
+   Решение: не трогать в первых correctness patches, кроме случая, если feature
+   schema tests потребуют изоляции side effect. Оформить как follow-up или
+   отдельную маленькую фазу после core contracts.
+
+6. `merge_asof(..., direction='nearest')` remains a data-alignment follow-up.
+
+   Текущие участки:
+
+   - `data_operations.py:538-544`;
+   - `data_operations.py:682-688`.
+
+   Почему не правим сразу:
+
+   - `nearest` может быть частью старой исследовательской логики;
+   - включение `tolerance` или обязательного `calculate_in_10_min_period` меняет
+     semantic feature generation, а не только технический контракт;
+   - это требует отдельной диагностики на реальных windows.
+
+   Решение: не смешивать с Phase 1-4. Пока фиксируем как follow-up после
+   восстановления базовых train/predict contracts.
+
+#### Practical next step
+
+Следующий кодовый шаг: Phase 1 only.
+
+Scope Phase 1:
+
+- исправить timestamp filters в `teach_n_test_data_with_basic_corrs(...)` и
+  `teach_n_test_data_with_optimized_corrs(...)`;
+- добавить focused unit test, который падает на старой форме и проходит на
+  исправленной;
+- не трогать scaler, schema, threshold и `merge_asof` в этом коммите.
+
 ### Phase 1 - Timestamp filter correctness
 
 Что:
