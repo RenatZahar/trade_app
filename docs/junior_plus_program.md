@@ -64,7 +64,7 @@
 
 ---
 
-## Дорожная карта (14 итераций)
+## Дорожная карта (13 итераций)
 
 Текущий порядок работ и временно отложенные темы фиксируются в
 `docs/active_work_plan.md`. Этот roadmap остается общей программой и историей
@@ -129,7 +129,7 @@
   - минимальный GitHub Actions gate вокруг `python -m pytest tests/unit_smoke -q`;
   - fail при падении быстрых smoke/unit checks;
   - lint всего проекта не включается в обязательный gate на старте и переносится
-    в технический backlog 13-й итерации.
+    в `docs/future_development_backlog.md`.
 
 ### 9) Agentic-ready контуры (P2, на будущее)
 **Junior+ умеет:** проектировать функции так, чтобы ими мог управлять агент.
@@ -167,31 +167,7 @@
     `raise`, propagation исключений, `*args`, `**kwargs`, сигнатуры функций;
   - фиксацию пробелов и коротких next steps перед следующими крупными задачами.
 
-### 13) Технический долг и следующие направления развития (P2, после технической шлифовки)
-**Junior+ умеет:** превращать разрозненные технические хвосты в проверяемый backlog и планировать развитие проекта без потери воспроизводимости.
-
-- Что внедряем:
-  - адаптацию логики старого Jupyter notebook к runtime-формату приложения;
-  - отдельный тестовый сценарий сравнения `app pipeline` vs `legacy notebook pipeline`;
-  - вероятно, декоратор или аналогичный instrumentation-layer для сохранения результатов ключевых функций в файлы;
-  - единый формат артефактов для последующего diff/сопоставления между основным и тестовым пайплайном.
-  - ревизию модели `data_table` + `few_tx_wallets` и возможный переход к
-    `wallet_stats` / service-таблицам;
-  - решение по `data/block_height_block_time_map/map.parquet`: оставить parquet
-    cache, перенести в SQLite/service-таблицу, пересчитывать из `data_table` или
-    заменить lookup-слоем;
-  - DB schema contract для новых SQL-таблиц: сценарии указывают зависимые
-    таблицы, smoke проверяет покрытие контрактом, live DB drift подсвечивается
-    warning-only;
-  - ревизию старых сценариев запуска из `main.py` и technical debt comments из
-    `runtime_scenarios.py`;
-  - решение по месту repo tooling/scripts, включая
-    `scripts/update_requirements_lock.py`;
-  - решение по public/private boundary: demo-заглушка, private package/core repo
-    или другой честный формат разделения strategy logic и public infrastructure;
-  - постепенное введение lint без обязательного lint всего проекта на старте.
-
-### 14) Parser backfill stability (P1)
+### 13) Parser backfill stability (P1)
 **Junior+ умеет:** вести долгий production-like data backfill без потери контекста, скрытых data gaps и преждевременных рискованных оптимизаций.
 
 - Что внедряем:
@@ -340,8 +316,11 @@
 - `10 - Portfolio packaging: done`
 - `11 - Notes and docs hygiene: done / archived`
 - `12 - Theory review and knowledge check: deferred`
-- `13 - Technical debt and next development directions: backlog / planned`
-- `14 - Parser backfill stability: active`
+- `13 - Parser backfill stability: active`
+
+Большой план будущего развития не занимает номер итерации и хранится в
+`docs/future_development_backlog.md`; текущий порядок выполнения - в
+`docs/active_work_plan.md`.
 
 Обновлять статусы после каждой завершенной итерации.
 

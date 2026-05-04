@@ -1,4 +1,4 @@
-# Iteration 14 - Parser backfill stability
+# Iteration 13 - Parser backfill stability
 
 ## Тема
 
@@ -136,4 +136,4 @@ Active
 
 - `docs/active_work_plan.md`
 - `docs/experiments/parser_runtime_hardening_2026-05-03.md`
-- `docs/iterations/iteration_13.md`
+- `docs/future_development_backlog.md`

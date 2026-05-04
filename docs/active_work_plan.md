@@ -18,14 +18,15 @@ As of 2026-05-04:
 - Iterations `1-10` are treated as completed foundation work.
 - Iteration `11 - Notes and docs hygiene` is treated as closed. The separate
   detailed iteration file is not part of the current docs set; its useful
-  outcomes live in `docs/main_notes.md`, `docs/iterations/iteration_13.md`, and
-  the cleaned project docs structure.
+  outcomes live in `docs/main_notes.md`, `docs/future_development_backlog.md`,
+  and the cleaned project docs structure.
 - Iteration `12 - Theory review and knowledge check` is intentionally deferred.
   It remains valuable, but it is time-consuming and should not block the current
   engineering work.
-- Iteration `13 - Next development directions` is a backlog container for
-  technical debt and architecture directions.
-- Iteration `14 - Parser backfill stability` is the current active iteration.
+- `docs/future_development_backlog.md` is the backlog container for technical
+  debt and architecture directions. It was intentionally moved out of
+  `docs/iterations/` because it is a plan, not a closeable iteration.
+- Iteration `13 - Parser backfill stability` is the current active iteration.
 - The former broad ML/trading validation scope is kept in this file as the
   follow-up roadmap, not as a single oversized iteration.
 
@@ -156,7 +157,7 @@ protocol:
 
 Relevant backlog:
 
-- `docs/iterations/iteration_13.md`, especially SQL performance review and
+- `docs/future_development_backlog.md`, especially SQL performance review and
   `data_table` / `wallet_stats` sections.
 
 ### 5. Compare Current Pipeline With Legacy Notebook Flow
@@ -172,7 +173,7 @@ Goal:
 
 Relevant backlog:
 
-- `docs/iterations/iteration_13.md`, section "Сравнение current pipeline и
+- `docs/future_development_backlog.md`, section "Сравнение current pipeline и
   legacy notebook pipeline".
 
 ### 6. Return to Theory Review
