@@ -37,7 +37,7 @@ def run_scenario_preflight(scenario_name: str):
     return dependency_names
 
 
-def prepare_training_data_and_train_new_model() -> None:
+def prepare_training_data_and_train_new_model(collector_name: str = "legacy") -> None:
     from modules.finding_price_peaks.get_price_peaks_df import update_peaks
     from modules.teach_and_update_models.training_entrypoints import train_new_model_from_json
 
@@ -46,7 +46,7 @@ def prepare_training_data_and_train_new_model() -> None:
     start_flask_app()
     update_btc_price_data()
     update_peaks()
-    train_new_model_from_json(TEACHING_TEST=0)
+    train_new_model_from_json(TEACHING_TEST=0, collector_name=collector_name)
 
 
 def run_param_grid_scenario(test_fraction, seed=None) -> None:

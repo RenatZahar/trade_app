@@ -4,8 +4,8 @@ from argparse import Namespace
 import pandas as pd
 
 from modules.blockchain_parser import main_parser
-from modules.logger import timing
 from modules.logger import run_tracker
+from modules.logger import runtime_bootstrap
 
 
 def test_build_parser_progress_snapshot_uses_recent_groups_for_speed_and_eta():
@@ -68,17 +68,17 @@ def test_parser_finishes_non_empty_block_stage_once(monkeypatch):
     monkeypatch.setattr(main_parser.apf, "print_cicle_info", lambda *_args: 60)
     monkeypatch.setattr(main_parser.apf, "get_avg_blocks_in_minut", lambda _time_of_circle: None)
     monkeypatch.setattr(
-        main_parser.app_logger_module,
+        runtime_bootstrap.app_logger_module,
         "log_tracker_stage_started",
         lambda _tracker, _stage_data: None,
     )
     monkeypatch.setattr(
-        main_parser.app_logger_module,
+        runtime_bootstrap.app_logger_module,
         "log_tracker_stage_finished",
         lambda _tracker, stage_data: finished_stages.append(stage_data),
     )
     monkeypatch.setattr(
-        timing.app_logger_module,
+        runtime_bootstrap.app_logger_module,
         "log_tracker_stage_progress",
         lambda _tracker, _details: None,
     )

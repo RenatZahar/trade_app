@@ -101,6 +101,12 @@ def build_parser() -> argparse.ArgumentParser:
         "main-pipeline",
         help="Запустить price updater, подготовку peaks и обучение новой модели",
     )
+    main_pipeline_parser.add_argument(
+        "--collector",
+        choices=("legacy", "wallet-stats"),
+        default="legacy",
+        help="Метод сбора train/profit данных для main-pipeline",
+    )
 
     param_grid_parser = scenario_subparsers.add_parser(
         "param-grid",

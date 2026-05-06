@@ -22,7 +22,9 @@ if __name__ == "__main__":
         if args.command == "main-pipeline":
             import runtime_scenarios as scenarios
 
-            scenarios.prepare_training_data_and_train_new_model()
+            scenarios.prepare_training_data_and_train_new_model(
+                collector_name=args.collector
+            )
             finish_runtime_success(tracker)
             raise SystemExit(0)
 

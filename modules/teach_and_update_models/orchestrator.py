@@ -1,3 +1,17 @@
+"""Training pipeline orchestration.
+
+Responsibility:
+- control the main training loop: time windows, tracker stages, collection,
+  cleaning, model training, profit-test evaluation, and model artifact saving;
+- call collectors through their explicit request/result contract;
+- keep pipeline-level logging and summaries close to the pipeline flow.
+
+Non-responsibility:
+- do not own collector-specific SQL/Dask data collection details;
+- do not own model file discovery or CLI/runtime scenario selection;
+- do not hide DB schema/index maintenance work inside orchestration.
+"""
+
 import os
 import json
 import pandas as pd
@@ -5,10 +19,14 @@ import gc
 from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-import modules.logger.logger as app_logger_module
 from modules.logger.experiment_metadata import summarize_grid_metadata
 from modules.logger.run_tracker import get_current_run_tracker
-from modules.logger.runtime_bootstrap import update_runtime_metadata
+from modules.logger.runtime_bootstrap import tracked_stage, update_runtime_metadata
+from .collectors import (
+    DEFAULT_COLLECTOR,
+    CollectorRequest,
+    collect_correlation_training_data,
+)
 from .determinism import sample_fraction
 from settings.main_pipeline import MAIN_PIPELINE_CORRELATION_CHUNK_SIZE
 from settings.paths import NEW_PARAM_GRID_DIR, PARAM_GRID_DIR, PARAM_GRID_RESULTS
@@ -50,7 +68,7 @@ def log_dataframe_summary(name, df):
     )
 
 
-def main_processing_model_orchestra(model, TEST, seed=None):
+def main_processing_model_orchestra(model, TEST, seed=None, collector_name=DEFAULT_COLLECTOR):
     tracker = get_current_run_tracker()
 
     # ДОБАВИТЬ В ПАРАМЕТРЫ МОДЕЛИ ПАРАМЕТРЫ ЗАТУХАНИЯ ДЛЯ ТЕСТА В ПАРАМ ГРИД. ПЕРЕДЕЛАТЬ ФУНКЦИЮ ТЕСТИРОВАНИЯ ПАРАМ ГРИДА ПОД РАЗНЫЕ
@@ -71,65 +89,59 @@ def main_processing_model_orchestra(model, TEST, seed=None):
     filter_params = model.filter_params
     correlation_type = model.correlation_params.get('correlation_type', None).lower()
     for iteration, tmps in model.tmsps_data.items():
-        try:
-            logger.info(f'\033[34mStart main teaching iteration {iteration} of {len(model.tmsps_data)}\033[0m')
-            logger.info(f'Models Time data: {tmps}')
+        logger.info(f'\033[34mStart main teaching iteration {iteration} of {len(model.tmsps_data)}\033[0m')
+        logger.info(f'Models Time data: {tmps}')
 
-            if tracker:
-                stage_data = tracker.start_stage('features.correlation_data')
-                app_logger_module.log_tracker_stage_started(tracker, stage_data)
-            cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test  = do.get_corelation_by_tmsp_df(TEST, filter_params, correlation_type, tmps, chunk_size, seed=seed)
+        with tracked_stage(
+            tracker,
+            'features.correlation_data',
+            success_details=f'iteration={iteration}',
+        ):
+            collector_request = CollectorRequest(
+                test_fraction=TEST,
+                filter_params=filter_params,
+                correlation_type=correlation_type,
+                time_window=tmps,
+                chunk_size=chunk_size,
+                seed=seed,
+            )
+            collected_data = collect_correlation_training_data(
+                collector_name,
+                collector_request,
+            )
+            logger.info("Collector metadata: %s", collected_data.metadata)
+            cor_data_in_iteration_to_teach = collected_data.train_df
+            cor_data_in_iteration_to_profit_test = collected_data.profit_test_df
             log_dataframe_summary("train_raw_before_clean", cor_data_in_iteration_to_teach)
             log_dataframe_summary("profit_raw_before_clean", cor_data_in_iteration_to_profit_test)
             cor_data_in_iteration_to_teach = do.clean_data(cor_data_in_iteration_to_teach)
             log_dataframe_summary("train_after_clean", cor_data_in_iteration_to_teach)
-        
+
             if cor_data_in_iteration_to_profit_test.empty:
-                if tracker:
-                    stage_data = tracker.finish_stage('success', details=f'iteration={iteration} profit_test_data_empty')
-                    app_logger_module.log_tracker_stage_finished(tracker, stage_data)
                 logger.info("Empty profit test data. Stop teaching.")
                 continue
             cor_data_in_iteration_to_profit_test = do.clean_data(cor_data_in_iteration_to_profit_test)
             log_dataframe_summary("profit_after_clean", cor_data_in_iteration_to_profit_test)
-            if tracker:
-                stage_data = tracker.finish_stage('success', details=f'iteration={iteration}')
-                app_logger_module.log_tracker_stage_finished(tracker, stage_data)
 
-            # cor_data_in_iteration_to_teach.to_parquet('cor_data_in_iteration_to_teach.parquet')
-            # cor_data_in_iteration_to_profit_test.to_parquet('cor_data_in_iteration_to_profit_test.parquet')
+        # cor_data_in_iteration_to_teach.to_parquet('cor_data_in_iteration_to_teach.parquet')
+        # cor_data_in_iteration_to_profit_test.to_parquet('cor_data_in_iteration_to_profit_test.parquet')
 
-            if tracker:
-                stage_data = tracker.start_stage('train.model_fit')
-                app_logger_module.log_tracker_stage_started(tracker, stage_data)
+        with tracked_stage(tracker, 'train.model_fit', success_details=f'iteration={iteration}'):
             model.train_model_specific(cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test, seed=seed)
-            if tracker:
-                stage_data = tracker.finish_stage('success', details=f'iteration={iteration}')
-                app_logger_module.log_tracker_stage_finished(tracker, stage_data)
 
-            if tracker:
-                stage_data = tracker.start_stage('evaluate.profit_test')
-                app_logger_module.log_tracker_stage_started(tracker, stage_data)
+        with tracked_stage(
+            tracker,
+            'evaluate.profit_test',
+            success_details=f'iteration={iteration}',
+        ):
             profit = model.calculate_total_value(cor_data_in_iteration_to_profit_test)
-            if tracker:
-                stage_data = tracker.finish_stage('success', details=f'iteration={iteration} profit={profit}')
-                app_logger_module.log_tracker_stage_finished(tracker, stage_data)
-            logger.info(f'\033[34mResult of profit test of {iteration} iteration: {profit}\033[0m')
+        logger.info(f'\033[34mResult of profit test of {iteration} iteration: {profit}\033[0m')
 
-            if tracker:
-                stage_data = tracker.start_stage('artifact.model_save')
-                app_logger_module.log_tracker_stage_started(tracker, stage_data)
+        with tracked_stage(tracker, 'artifact.model_save', success_details=f'iteration={iteration}'):
             model.save_model(iteration)
-            if tracker:
-                stage_data = tracker.finish_stage('success', details=f'iteration={iteration}')
-                app_logger_module.log_tracker_stage_finished(tracker, stage_data)
 
-            gc.collect()
-        except Exception as e:
-            if tracker:
-                stage_data = tracker.finish_stage('error', details=f'iteration={iteration} error={e}')
-                app_logger_module.log_tracker_stage_finished(tracker, stage_data)
-            raise
+        gc.collect()
+
 def teaching_with_param_grid_orchestrator(TEACHING_TEST, seed=None):
     warn_required_data_table_indexes(BLOCKS_SQL_DATA, "param_grid.correlation_pipeline")
     time_grid_params, grid_params = sf.check_for_new_param_grid()
@@ -271,21 +283,48 @@ def train_model_for_param(param, cor_data_in_iteration_to_teach, cor_data_in_ite
         raise ValueError(f"Модель типа {model_type} не поддерживается.")
     return model.train_model_specific(cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test, return_=True, seed=seed)
 
-def teach_model(model_type_data, model_type, model_info, model_dir_file, TEACHING_TEST, seed=None):
+def teach_model(
+    model_type_data,
+    model_type,
+    model_info,
+    model_dir_file,
+    TEACHING_TEST,
+    seed=None,
+    collector_name=DEFAULT_COLLECTOR,
+):
     if 'json' in model_type_data:
         logger.info("Найден новый json модели")
-        teach_model_from_json(model_type, model_info, model_dir_file, TEACHING_TEST, seed=seed)
+        teach_model_from_json(
+            model_type,
+            model_info,
+            model_dir_file,
+            TEACHING_TEST,
+            seed=seed,
+            collector_name=collector_name,
+        )
     elif 'pkl' in model_type_data:
         logger.info("Найден новый pkl модели") 
         logger.error('Код для использования модели PKL еще не написан. Надо сохранять параметры в папку teached models если буду использовать pkl')
         raise NotImplementedError("PKL model teaching flow is not implemented yet.")
 
-def teach_model_from_json(model_type, model_info, init_dir_file, TEACHING_TEST, seed=None):
+def teach_model_from_json(
+    model_type,
+    model_info,
+    init_dir_file,
+    TEACHING_TEST,
+    seed=None,
+    collector_name=DEFAULT_COLLECTOR,
+):
     if model_type == 'ElasticNet':
         model = mc.ElasticNetModel(model_info)
     else:
         raise ValueError(f"Модель типа {model_type} не поддерживается.")
     model.init_dir_file = init_dir_file
-    main_processing_model_orchestra(model, TEACHING_TEST, seed=seed)
+    main_processing_model_orchestra(
+        model,
+        TEACHING_TEST,
+        seed=seed,
+        collector_name=collector_name,
+    )
 
 

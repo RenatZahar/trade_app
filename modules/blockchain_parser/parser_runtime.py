@@ -5,8 +5,8 @@ import time
 
 from modules.blockchain_parser.main_parser import parser
 from modules.btc_core_init.btc_core_manager import blocks_to_download, get_btc_status
-from modules.logger import logger as app_logger_module
 from modules.logger.run_tracker import get_current_run_tracker
+from modules.logger.runtime_bootstrap import finish_runtime_error
 from modules.redis_init.redis_init import (
     get_redis_status,
     send_message,
@@ -84,8 +84,7 @@ def run_parser_asyncio():
         asyncio.run(parser())
     except Exception as e:
         logger.error("Ошибка в парсере блокчейна: %s", e)
-        tracker.finish_run("error", e)
-        app_logger_module.log_tracker_run_event(tracker, "run_finished", level=logging.ERROR)
+        finish_runtime_error(tracker, e)
         send_message("parser_status", "completed with error")
     finally:
         with parser_lock:

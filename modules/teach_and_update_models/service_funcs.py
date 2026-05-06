@@ -1,4 +1,16 @@
-# service_funcs.py
+"""Remaining shared helpers for training-related modules.
+
+Responsibility:
+- keep small shared utilities that do not yet have a clearer owner, such as
+  price peaks loading, time-window construction, param-grid expansion, sqlite
+  connection pragmas, and model artifact path helpers;
+- act as a temporary holding module while responsibilities are clarified.
+
+Non-responsibility:
+- do not add new collector selection or collector implementation logic here;
+- do not add pipeline stage orchestration here;
+- move helpers out of this module when their owner becomes clear.
+"""
 
 import os
 import json
@@ -13,7 +25,6 @@ from sklearn.model_selection import ParameterGrid
 
 from settings.paths import (
     BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE,
-    NEW_MODELS_PATH,
     NEW_PARAM_GRID_DIR,
     TRAINED_MODELS_DIR,
 )
@@ -23,32 +34,6 @@ import logging
 logger = logging.getLogger("app")
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
-
-def get_model_type(model_info):
-    return model_info['model']['type']
-
-def check_for_new_models():
-    if not NEW_MODELS_PATH.exists():
-        raise FileNotFoundError(f"Директория с новыми моделями не найдена: {NEW_MODELS_PATH}")
-
-    files = [f for f in NEW_MODELS_PATH.iterdir() if f.is_file()]
-    if not files:
-        raise FileNotFoundError(f"В директории {NEW_MODELS_PATH} нет файлов моделей для обучения.")
-
-    for file in files:
-        if 'example' in file.name:
-            continue
-        full_dir_file = os.path.join(NEW_MODELS_PATH, file)
-        if file.suffix == '.json':
-            with open(full_dir_file, 'r', encoding='utf-8') as file:
-                model_info = json.load(file)
-                model_type = get_model_type(model_info)
-                # print(model_type)
-            return 'json', model_type, model_info, full_dir_file
-        if file.suffix == '.pkl':
-            return 'pkl', None, None, None
-
-    raise RuntimeError(f"В директории {NEW_MODELS_PATH} не найден поддерживаемый файл модели.")
 
 def get_peaks_df():
     df = pd.read_parquet(BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE)

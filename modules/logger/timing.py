@@ -4,8 +4,7 @@ import time
 from contextlib import contextmanager
 from functools import wraps
 
-from modules.logger import logger as app_logger_module
-from modules.logger.run_tracker import get_current_run_tracker
+from modules.logger.runtime_bootstrap import log_runtime_progress
 
 
 logger = logging.getLogger("app")
@@ -23,14 +22,7 @@ def _format_timing_details(event, duration_sec=None, details=None) -> str:
 def log_timing(event, duration_sec=None, **details):
     details_message = _format_timing_details(event, duration_sec, details)
     logger.info("PARSER_TIMING %s", details_message)
-
-    try:
-        tracker = get_current_run_tracker()
-    except RuntimeError:
-        return
-
-    if tracker.current_stage is not None:
-        app_logger_module.log_tracker_stage_progress(tracker, details_message)
+    log_runtime_progress(details_message)
 
 
 @contextmanager

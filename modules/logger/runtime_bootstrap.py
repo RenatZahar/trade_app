@@ -4,7 +4,7 @@ from contextlib import contextmanager
 import modules.logger.logger as app_logger_module
 from modules.logger import agent_outputs
 from modules.logger.experiment_metadata import build_experiment_metadata
-from modules.logger.run_tracker import RunTracker
+from modules.logger.run_tracker import RunTracker, get_current_run_tracker
 
 
 def start_runtime_logging(args):
@@ -24,6 +24,16 @@ def update_runtime_metadata(tracker, **metadata_updates):
     tracker.set_metadata(metadata)
     app_logger_module.log_tracker_metadata(tracker)
     return metadata
+
+
+def log_runtime_progress(details):
+    try:
+        tracker = get_current_run_tracker()
+    except RuntimeError:
+        return
+
+    if tracker.current_stage is not None:
+        app_logger_module.log_tracker_stage_progress(tracker, details)
 
 
 def _resolve_stage_name(stage):
@@ -47,6 +57,8 @@ def tracked_stage(tracker, stage, success_details=None):
         app_logger_module.log_tracker_stage_finished(tracker, stage_data)
         raise
     else:
+        if callable(success_details):
+            success_details = success_details()
         stage_data = tracker.finish_stage("success", details=success_details)
         app_logger_module.log_tracker_stage_finished(tracker, stage_data)
 

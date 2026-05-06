@@ -7,7 +7,7 @@ from collections import deque
 
 from bitcoinrpc.authproxy import AuthServiceProxy
 from modules.redis_init.redis_init import send_message
-import modules.logger.logger as app_logger_module
+from modules.logger.runtime_bootstrap import tracked_stage
 from modules.logger.timing import timed_step
 
 from . import async_parser_functions as apf
@@ -114,17 +114,18 @@ async def parser():
         logger.info("Запуск парсера блокчейна")
         send_message('parser_status', 'working')
 
-        stage_data = tracker.start_stage('parser.prepare_download_list')
-        app_logger_module.log_tracker_stage_started(tracker, stage_data)
-
-        await apf.set_wal_mode(BLOCKS_SQL_DATA)
-        last_block = await apf.async_get_existing_last_block(BLOCKS_SQL_DATA, START_BLOCK)
-        rpc_connection_main = apf.get_rpc_connection()
-        all_blocks_to_download = apf.get_list_of_blocks_to_download(last_block, rpc_connection_main)
-        blocks_to_parsing_generator = apf.split_list_into_chunks(all_blocks_to_download, QUANTITY_OF_BLOCKS_IN_ITERATION, MAX_ITERATIONS, PROBLEM_BLOCKS_LIST)
-
-        stage_data = tracker.finish_stage('success', details=f'blocks_to_download={len(all_blocks_to_download)}')
-        app_logger_module.log_tracker_stage_finished(tracker, stage_data)
+        prepare_stage_details = None
+        with tracked_stage(
+            tracker,
+            'parser.prepare_download_list',
+            success_details=lambda: prepare_stage_details,
+        ):
+            await apf.set_wal_mode(BLOCKS_SQL_DATA)
+            last_block = await apf.async_get_existing_last_block(BLOCKS_SQL_DATA, START_BLOCK)
+            rpc_connection_main = apf.get_rpc_connection()
+            all_blocks_to_download = apf.get_list_of_blocks_to_download(last_block, rpc_connection_main)
+            blocks_to_parsing_generator = apf.split_list_into_chunks(all_blocks_to_download, QUANTITY_OF_BLOCKS_IN_ITERATION, MAX_ITERATIONS, PROBLEM_BLOCKS_LIST)
+            prepare_stage_details = f'blocks_to_download={len(all_blocks_to_download)}'
         
 
 
@@ -138,65 +139,60 @@ async def parser():
                 send_message('parser_status', 'completed')
                 return
             
-            stage_data = tracker.start_stage('parser.process_blocks_group')
-            app_logger_module.log_tracker_stage_started(tracker, stage_data)
-            
             start_time = time.time()
             stage_started_perf_counter = time.perf_counter()
-            with timed_step("parser.process_blocks_group.parsing_data", blocks=blocks_group) as timing:
-                data = await apf.parsing_data(blocks_group)
-                timing["df_rows"] = len(data)
-            if not data.empty:
-                with timed_step("parser.process_blocks_group.stats", blocks=blocks_group) as timing:
-                    min_block_height, max_block_height = apf.get_statistik_data(data)
-                    timing["min_block"] = min_block_height
-                    timing["max_block"] = max_block_height
-                save_task = asyncio.create_task(apf.save_data_to_db_with_semaphore(data, BLOCKS_SQL_DATA))
-                tasks.append(save_task)
-                with timed_step("parser.process_blocks_group.cycle_info", blocks=blocks_group):
-                    time_of_circle = apf.print_cicle_info(start_time, min_block_height, max_block_height , len(blocks_group), data, QUANTITY_OF_BLOCKS_IN_ITERATION) # type: ignore
-                apf.get_avg_blocks_in_minut(time_of_circle)
+            process_stage_details = None
+            with tracked_stage(
+                tracker,
+                'parser.process_blocks_group',
+                success_details=lambda: process_stage_details,
+            ):
+                with timed_step("parser.process_blocks_group.parsing_data", blocks=blocks_group) as timing:
+                    data = await apf.parsing_data(blocks_group)
+                    timing["df_rows"] = len(data)
+                if not data.empty:
+                    with timed_step("parser.process_blocks_group.stats", blocks=blocks_group) as timing:
+                        min_block_height, max_block_height = apf.get_statistik_data(data)
+                        timing["min_block"] = min_block_height
+                        timing["max_block"] = max_block_height
+                    save_task = asyncio.create_task(apf.save_data_to_db_with_semaphore(data, BLOCKS_SQL_DATA))
+                    tasks.append(save_task)
+                    with timed_step("parser.process_blocks_group.cycle_info", blocks=blocks_group):
+                        time_of_circle = apf.print_cicle_info(start_time, min_block_height, max_block_height , len(blocks_group), data, QUANTITY_OF_BLOCKS_IN_ITERATION) # type: ignore
+                    apf.get_avg_blocks_in_minut(time_of_circle)
 
-                if tasks:
-                    with timed_step("parser.process_blocks_group.save_wait", blocks=blocks_group, df_rows=len(data)):
-                        await asyncio.gather(*tasks)
-                        tasks.clear()
+                    if tasks:
+                        with timed_step("parser.process_blocks_group.save_wait", blocks=blocks_group, df_rows=len(data)):
+                            await asyncio.gather(*tasks)
+                            tasks.clear()
 
-                stage_data = tracker.finish_stage(
-                    'success',
-                    details=f'blocks={len(blocks_group)} range={min_block_height}-{max_block_height}',
-                )
-                app_logger_module.log_tracker_stage_finished(tracker, stage_data)
+                    process_stage_details = f'blocks={len(blocks_group)} range={min_block_height}-{max_block_height}'
 
-                stage_duration_sec = time.perf_counter() - stage_started_perf_counter
-                processed_blocks += len(blocks_group)
-                recent_groups.append(
-                    {
-                        "blocks": len(blocks_group),
-                        "duration_sec": stage_duration_sec,
-                    }
-                )
-                remaining_blocks = max(total_blocks_to_download - processed_blocks, 0)
-                progress_snapshot = _build_parser_progress_snapshot(
-                    last_range=f"{min_block_height}-{max_block_height}",
-                    processed_blocks=processed_blocks,
-                    remaining_blocks=remaining_blocks,
-                    recent_groups=list(recent_groups),
-                )
-                _log_parser_progress(progress_snapshot)
+                    stage_duration_sec = time.perf_counter() - stage_started_perf_counter
+                    processed_blocks += len(blocks_group)
+                    recent_groups.append(
+                        {
+                            "blocks": len(blocks_group),
+                            "duration_sec": stage_duration_sec,
+                        }
+                    )
+                    remaining_blocks = max(total_blocks_to_download - processed_blocks, 0)
+                    progress_snapshot = _build_parser_progress_snapshot(
+                        last_range=f"{min_block_height}-{max_block_height}",
+                        processed_blocks=processed_blocks,
+                        remaining_blocks=remaining_blocks,
+                        recent_groups=list(recent_groups),
+                    )
+                    _log_parser_progress(progress_snapshot)
 
 
-            else:
-                stage_data = tracker.finish_stage('success', details=f'blocks={len(blocks_group)} data_is_empty')
-                app_logger_module.log_tracker_stage_finished(tracker, stage_data)
-                processed_blocks += len(blocks_group)
+                else:
+                    process_stage_details = f'blocks={len(blocks_group)} data_is_empty'
+                    processed_blocks += len(blocks_group)
 
         logger.info("Закончились блоки для скачки, ожидаем перезапуск")
         send_message('parser_status', 'completed')
     except Exception as e:
-        stage_data = tracker.finish_stage('error', details=str(e))
-        if stage_data is not None:
-            app_logger_module.log_tracker_stage_finished(tracker, stage_data)
         logger.error(f"Произошла ошибка: {e}")
         raise
 

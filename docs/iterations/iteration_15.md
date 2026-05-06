@@ -28,11 +28,63 @@ Start gate satisfied:
 Current resume point:
 
 - iteration 15 is open;
-- no production data collection code has been changed in this iteration yet;
-- next required step is Phase 1 design review, because this work touches
-  SQLite, large tables, indexes, and future `wallet_stats` maintenance;
-- safe implementation scope after review is expected to start with the
-  collector wrapper and `legacy` default path.
+- Phase 1 design review selected the minimal safe path first;
+- Phase 2-4 minimal implementation is in place: collector wrapper,
+  `main-pipeline --collector legacy`, metadata/logging, and explicit
+  `wallet-stats` stub;
+- no SQLite schema, table data, indexes, bulk operations, or maintenance
+  scripts should be changed as part of this minimal patch.
+
+Decision:
+
+- selected option: minimal patch;
+- reason: it introduces the collector contract without changing SQL behavior;
+- responsibility boundary: `collectors.py` owns collector selection and the
+  collector request/result contract; `orchestrator.py` owns train/evaluate/save
+  pipeline control; `data_operations.py` remains the legacy low-level
+  SQL/Dask/dataframe implementation until it can be split safely;
+- `training_entrypoints.py` remains the public training runtime API and now owns
+  active model file discovery instead of leaving it in generic `service_funcs.py`;
+- deferred: real `wallet_stats` table/collector implementation still requires
+  a separate data safety design review before any DB mutation or expensive
+  scan.
+
+Checks:
+
+- `python -m pytest tests\unit_smoke\test_main.py tests\unit_smoke\test_runtime_scenarios.py tests\unit_smoke\test_collectors.py tests\unit_smoke\test_training_entrypoints.py -q`
+  passed: `29 passed`;
+- `.venv\Scripts\python.exe -m pytest tests\unit_smoke -q` passed:
+  `110 passed, 1 warning`;
+- system `python -m pytest tests\unit_smoke -q` failed in
+  `test_dependency_runtime_contracts.py` because the system Python has
+  `dask_expr` installed while the project contract is verified in `.venv`.
+- GitHub Actions `Quality Gate / Smoke/unit tests` failed on `main_branch`
+  commit `cb11c3d` because `settings/data_operations.py` is ignored locally and
+  missing in clean CI checkout; tracked code imports
+  `settings.data_operations.MIN_TXS_PER_WALLET` and
+  `TOTAL_AMOUNT_MORE_THAN_BTC`.
+- Latest local verification after tracker cleanup:
+  `.venv\Scripts\python.exe -m pytest tests\unit_smoke -q` passed:
+  `110 passed, 1 warning`.
+- Parser tracker cleanup:
+  - `modules/blockchain_parser/main_parser.py` no longer manually starts and
+    finishes tracker stages; it uses shared `tracked_stage(...)`;
+  - `modules/blockchain_parser/parser_runtime.py` no longer manually finishes
+    failed runs; it uses shared `finish_runtime_error(...)`;
+  - `tracked_stage(...)` now accepts callable `success_details`, so stage
+    details can be computed inside the stage without duplicating finish logic.
+- Progress tracker cleanup:
+  - `modules/logger/timing.py` now delegates stage progress logging to shared
+    `log_runtime_progress(...)`;
+  - local ignored `modules/teach_and_update_models/data_operations.py` uses the
+    same helper instead of a private `get_current_run_tracker()` wrapper.
+
+Next narrow step:
+
+- fix the CI-only missing `settings.data_operations` boundary by moving needed
+  constants into tracked config/code or removing the import if unused;
+- then commit/push the scoped iteration 15 changes after reviewing staged scope,
+  excluding pre-existing unrelated local files/artifacts.
 
 Local worktree note at start:
 

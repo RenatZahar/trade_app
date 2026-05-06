@@ -52,7 +52,9 @@ def test_prepare_training_data_and_train_new_model_orders_pipeline_steps(monkeyp
     peaks_module.update_peaks = lambda: calls.append("update_peaks")
     training_module = types.ModuleType("modules.teach_and_update_models.training_entrypoints")
     training_module.train_new_model_from_json = (
-        lambda TEACHING_TEST, seed=None: calls.append(("teach_and_update_models", TEACHING_TEST, seed))
+        lambda TEACHING_TEST, seed=None, collector_name="legacy": calls.append(
+            ("teach_and_update_models", TEACHING_TEST, seed, collector_name)
+        )
     )
     monkeypatch.setitem(sys.modules, "modules.finding_price_peaks.get_price_peaks_df", peaks_module)
     monkeypatch.setitem(
@@ -82,8 +84,42 @@ def test_prepare_training_data_and_train_new_model_orders_pipeline_steps(monkeyp
         "start_flask_app",
         "update_btc_price_data",
         "update_peaks",
-        ("teach_and_update_models", 0, None),
+        ("teach_and_update_models", 0, None, "legacy"),
     ]
+
+
+def test_prepare_training_data_and_train_new_model_passes_collector(monkeypatch):
+    calls = []
+    peaks_module = types.ModuleType("modules.finding_price_peaks.get_price_peaks_df")
+    peaks_module.update_peaks = lambda: calls.append("update_peaks")
+    training_module = types.ModuleType("modules.teach_and_update_models.training_entrypoints")
+    training_module.train_new_model_from_json = (
+        lambda TEACHING_TEST, seed=None, collector_name="legacy": calls.append(
+            ("teach_and_update_models", TEACHING_TEST, seed, collector_name)
+        )
+    )
+    monkeypatch.setitem(sys.modules, "modules.finding_price_peaks.get_price_peaks_df", peaks_module)
+    monkeypatch.setitem(
+        sys.modules,
+        "modules.teach_and_update_models.training_entrypoints",
+        training_module,
+    )
+    monkeypatch.setattr(
+        scenarios,
+        "warn_data_table_indexes_for_scenario",
+        lambda scenario_name: calls.append(("warn_indexes", scenario_name)),
+    )
+    monkeypatch.setattr(
+        scenarios,
+        "run_scenario_preflight",
+        lambda scenario_name: calls.append(("preflight", scenario_name)),
+    )
+    monkeypatch.setattr(scenarios, "start_flask_app", lambda: calls.append("start_flask_app"))
+    monkeypatch.setattr(scenarios, "update_btc_price_data", lambda: calls.append("update_btc_price_data"))
+
+    scenarios.prepare_training_data_and_train_new_model(collector_name="wallet-stats")
+
+    assert calls[-1] == ("teach_and_update_models", 0, None, "wallet-stats")
 
 
 def test_run_param_grid_scenario_orders_steps(monkeypatch):

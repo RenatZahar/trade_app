@@ -97,7 +97,20 @@ def test_parse_args_accepts_main_pipeline_command():
     args = cli_args.parse_args(["main-pipeline"])
 
     assert args.command == "main-pipeline"
+    assert args.collector == "legacy"
     assert args.start_parser is False
+
+
+def test_parse_args_accepts_main_pipeline_wallet_stats_collector():
+    args = cli_args.parse_args(["main-pipeline", "--collector", "wallet-stats"])
+
+    assert args.command == "main-pipeline"
+    assert args.collector == "wallet-stats"
+
+
+def test_parse_args_rejects_unknown_main_pipeline_collector():
+    with pytest.raises(SystemExit):
+        cli_args.parse_args(["main-pipeline", "--collector", "unknown"])
 
 
 def test_parse_args_accepts_param_grid_command_with_seed_and_test_fraction():
