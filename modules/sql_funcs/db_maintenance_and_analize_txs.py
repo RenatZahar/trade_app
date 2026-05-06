@@ -182,46 +182,6 @@ def analyze_wallet_transactions(db_path, table_name):
 
     finally:
         conn.close()
-def count_wallet_transactions_and_rows(db_path):
-    """
-    Подключается к базе данных и подсчитывает количество кошельков и общее количество строк (транзакций)
-    для кошельков с 1, 2 и 3 транзакциями.
-    """
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        
-        # Внутренний запрос группирует строки по Wallet_id, подсчитывая число транзакций (строк) для каждого кошелька.
-        # Внешний запрос затем группирует результаты по этому числу (cnt) и считает:
-        # - Количество кошельков (wallet_count) с таким числом транзакций.
-        # - Общее число строк (row_count), что фактически равно cnt * wallet_count.
-        query = """
-        SELECT
-            cnt,
-            COUNT(*) AS wallet_count,
-            SUM(cnt) AS row_count
-        FROM (
-            SELECT Wallet_id, COUNT(*) AS cnt
-            FROM few_tx_wallets
-            GROUP BY Wallet_id
-        ) sub
-        WHERE cnt IN (1, 2, 3)
-        GROUP BY cnt;
-        """
-        cursor.execute(query)
-        results = cursor.fetchall()
-        
-        logger.info("Результаты группировки:")
-        for cnt, wallet_count, row_count in results:
-            logger.info(f"Кошельки с {cnt} транзакциями: {wallet_count} кошельков, всего {row_count} строк")
-            
-    except Exception as e:
-        logger.error(f"Ошибка при выполнении запроса: {e}")
-        traceback.print_exc()
-    finally:
-        cursor.close()
-        conn.close()
-        
 if __name__ == "__main__":
     BLOCKS_SQL_DATA = r"C:\blocks_sql_data\blocks_sql_data_db.db"
 

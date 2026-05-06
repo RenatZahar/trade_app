@@ -4,7 +4,6 @@ from importlib import metadata
 
 from settings.paths import BASE_DIR, BLOCKS_SQL_DATA
 from settings.parser import MAX_LINES_IN_HASH_CACHE, MAX_LINES_IN_TX_CACHE
-from settings.sql import LOW_TX_WALLET_MAX_TX_COUNT, TXS_MOVED
 
 METADATA_GRID_PREVIEW_LIMIT = 5
 
@@ -63,10 +62,7 @@ def build_experiment_metadata(
             "base_dir": str(BASE_DIR),
             "blocks_sql_data": str(BLOCKS_SQL_DATA),
         },
-        "sql_state": {
-            "txs_moved": TXS_MOVED,
-            "low_tx_wallet_max_tx_count": LOW_TX_WALLET_MAX_TX_COUNT,
-        },
+        "sql_state": {},
         "parser_cache": {
             "max_lines_in_tx_cache": effective_tx_cache_lines,
             "max_lines_in_hash_cache": effective_hash_cache_lines,

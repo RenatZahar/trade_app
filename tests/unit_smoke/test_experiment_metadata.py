@@ -17,7 +17,7 @@ def test_build_experiment_metadata_collects_seed_args_and_runtime(monkeypatch):
     assert metadata["versions"]["dask"] == "dask-version"
     assert metadata["versions"]["sklearn"] == "scikit-learn-version"
     assert metadata["runtime"]["blocks_sql_data"]
-    assert "txs_moved" in metadata["sql_state"]
+    assert metadata["sql_state"] == {}
     assert metadata["parser_cache"]["max_lines_in_tx_cache"] >= 0
     assert metadata["parser_cache"]["max_lines_in_hash_cache"] >= 0
 

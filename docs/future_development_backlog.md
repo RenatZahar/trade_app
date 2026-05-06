@@ -93,6 +93,111 @@ stop/resume и idempotency contract:
 - решить, нужен ли resume отдельных grid combinations или достаточно
   безопасного повторного запуска всего сценария.
 
+### 1.2 Проверка и оптимизация `param-grid`
+
+Цель:
+
+- проверить, что сценарий `python main.py param-grid` работает после
+  стабилизации `main-pipeline`;
+- разделить параметры, которые меняют математику модели, и performance knobs,
+  которые должны менять только скорость;
+- определить, какие промежуточные parquet artifacts можно кэшировать, чтобы не
+  пересчитывать дорогую correlation/data-collection часть для каждой
+  комбинации.
+
+Поведенческие параметры, которые нужно явно поддержать в grid/contract:
+
+- Price/peaks layer:
+  - `settings.price_peaks.line_time_duration_min`:
+    размер ценовой свечи/сглаженного ряда в минутах; сейчас `10`;
+  - `PRICE_LINE_DURATION_SEC = line_time_duration_min * 60`;
+  - `PRICE_LINE_HALF_WINDOW_SEC = PRICE_LINE_DURATION_SEC / 2`;
+  - `merge_asof(..., tolerance=PRICE_LINE_HALF_WINDOW_SEC)`, то есть tolerance
+    задается в секундах и является производной от `line_time_duration_min`;
+  - buy/sell interval flags в tx features задаются вокруг `Buy`/`Sell`
+    timestamps из peaks-data: `tmsp ± PRICE_LINE_HALF_WINDOW_SEC`;
+  - `settings.price_peaks.cicle`: используется как минимальная дистанция между
+    peaks в днях через `distance = cicle * 24 * 60 / line_time_duration_min`;
+  - `settings.price_peaks.price_diff_pct`: минимальная разница цены в процентах
+    для отбора движения;
+  - `settings.price_peaks.plato`: процентная ширина ценового плато вокруг
+    min/max цены, где помечаются дополнительные buy/sell points;
+  - hardcoded детали `price_peaks_func.py` (`width=1`, сдвиги индексов,
+    `end_peak+10`, правила `identify_trade_intervals`) пока не включать в grid,
+    но зафиксировать как часть текущего label-generation contract.
+- Model params:
+  - `model.model_param.alpha`;
+  - `model.model_param.l1_ratio`;
+  - `model.model_param.decision_threshold`.
+- Time params:
+  - `iterations`;
+  - `training_data_duration_months` / future `training_data_duration_days`;
+  - `profit_test_months` / future `profit_test_days`;
+  - `model_relevance_period_months` / future `model_relevance_period_days`;
+  - `time_to_get_cmlt_day`;
+  - hardcoded month length `30 * 24 * 60 * 60` не трогать в первом grid audit,
+    но явно записывать в metadata.
+- Data/wallet filters:
+  - `filters.txs_count_of_wallets`;
+  - `filters.correlation_threshold`;
+  - `settings.data_operations.TOTAL_AMOUNT_MORE_THAN_BTC`;
+  - recency filter в `filter_txs_of_chunk`: если train window достаточно
+    большой, wallet должен иметь последний tx во второй половине train window;
+  - `correlation_type`: `basic` / `optimized`.
+- Feature decay:
+  - `time_frame_hours = 6`;
+  - `tau = time_frame_hours * 6`;
+  - `alpha = 1 - exp(-1 / tau)`;
+  - сейчас это hardcoded feature-engineering behavior; решить, включать ли
+    `time_frame_hours` в grid после проверки базового `param-grid`.
+
+Параметры, которые уже лежат в `grid_params`:
+
+- `model_param`;
+- `time_params`;
+- `correlation_params`;
+- `filters`.
+
+Параметры, которые пока не лежат в `grid_params`, но могут менять итог модели:
+
+- `settings.price_peaks.*`;
+- `settings.data_operations.TOTAL_AMOUNT_MORE_THAN_BTC`;
+- hardcoded feature-decay `time_frame_hours`;
+- hardcoded peak-label rules.
+
+Seed contract:
+
+- для полного `param-grid` без sampling и при текущем `ElasticNet` seed не
+  должен менять результат;
+- seed нужен для `--test-fraction`, потому что он выбирает подмножество grid /
+  data;
+- seed нужно сохранить в metadata и cache-key, чтобы test-fraction artifacts
+  были воспроизводимы;
+- если появятся stochastic models или stochastic training режимы, seed должен
+  прокидываться в model params.
+
+Artifact/cache contract для ускорения:
+
+- cache-key должен включать все параметры, которые меняют входные данные или
+  признаки:
+  price/peaks settings, time windows, filters, `correlation_type`,
+  `TOTAL_AMOUNT_MORE_THAN_BTC`, feature-decay settings, DB identity/range,
+  `line_time_duration_min`, seed/test-fraction при sampling;
+- cache-key не должен включать только model-only параметры (`alpha`,
+  `l1_ratio`, `decision_threshold`), если cached train/profit DataFrames уже
+  построены и feature columns совпадают;
+- перед использованием `PARAM_GRID_RESULTS` проверять timestamp range,
+  feature schema, label/action distribution, source DB range и настройки
+  generation contract, а не просто наличие parquet файлов.
+
+Performance knobs, которые не должны менять математику и не являются частью
+param search:
+
+- Dask worker/thread/memory profile;
+- `MAIN_PIPELINE_CORRELATION_CHUNK_SIZE` и param-grid chunk size;
+- Dask temp dir / shuffle / spill настройки;
+- parquet checkpoint placement, если он behavior-preserving.
+
 ### 2. Проверка расхождений в data consistency test вокруг `Btc_block_time_price`
 
 - Прогнать live-тест на соответствие SQL-данных и повторной BTC-реконструкции.

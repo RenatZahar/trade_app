@@ -74,7 +74,6 @@ from modules.blockchain_parser import async_parser_functions as apf
 from modules.btc_core_init.btc_core_manager import get_btc_status
 from settings.parser import MIN_VALUE_THRESHOLD
 from settings.paths import APP_TEMP_DIR, BLOCKS_SQL_DATA, CLEARED_PRICES_DIR
-from settings.sql import LOW_TX_WALLET_MAX_TX_COUNT, TXS_MOVED
 
 
 RAW_RECORD_COLUMNS = [
@@ -111,8 +110,6 @@ ARTIFACTS_DIR = APP_TEMP_DIR / "downloaded_from_btc_data_test"
 
 
 def get_sql_source_tables() -> list[str]:
-    if TXS_MOVED:
-        return ["data_table", "few_tx_wallets"]
     return ["data_table"]
 
 
@@ -638,8 +635,6 @@ def run_downloaded_from_btc_data_test(
     summary = {
         "test_name": "test_downloaded_from_btc_data",
         "seed": seed,
-        "txs_moved": TXS_MOVED,
-        "low_tx_wallet_max_tx_count": LOW_TX_WALLET_MAX_TX_COUNT,
         "sql_source_tables": get_sql_source_tables(),
     }
     ensure_bitcoin_core_ready_for_test()
