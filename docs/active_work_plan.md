@@ -43,24 +43,25 @@ As of 2026-05-06:
 - Runtime production references to the legacy `few_tx_wallets` / `TXS_MOVED`
   path have been removed. Historical experiment docs can still mention them.
 - Iteration `15 - Main pipeline collector contract and wallet_stats data
-  collection` is planned in `docs/iterations/iteration_15.md`. Its start gate
-  is satisfied, but it has not been started in this worktree.
+  collection` is active on branch
+  `feature/iteration-15-collector-contract-wallet-stats`.
 - Cost-control rules for long Codex sessions are recorded in
   `docs/codex_cost_control.md`. Prefer new-chat handoffs for each major phase.
 
 ## Active Priorities
 
-### 1. Choose The Next Workstream
+### 1. Execute Iteration 15 Collector Contract Work
 
-Iteration 14 is closed. The next workstream should be selected explicitly
-instead of continuing to add scope to the closed correctness iteration.
+Use `docs/iterations/iteration_15.md` as the active iteration document.
 
-Good next candidates:
+Immediate scope:
 
-- profit-test trustworthiness and no-buy/all-cash diagnosis;
-- `param-grid` viability and cache/artifact contract;
-- Dask performance ladder;
-- iteration 15 collector/wallet_stats design.
+- start with Phase 1 design review before risky SQLite or `wallet_stats`
+  implementation;
+- implement the safe collector wrapper / `legacy` default only after the
+  selected plan is clear;
+- keep `wallet-stats` as an explicit stub unless a separate data safety design
+  review is accepted.
 
 Closed inside iteration 14:
 
@@ -125,7 +126,6 @@ Near-term parser follow-ups:
 
 ## Deferred Or Future Work
 
-- Iteration 15 collector contract and `wallet_stats` data collection design.
 - SQL performance review and data collection optimization.
 - Legacy notebook vs current pipeline comparison.
 - Feature audit and model signal review.

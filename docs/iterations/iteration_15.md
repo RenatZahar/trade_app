@@ -8,12 +8,39 @@ contract, с будущим переходом от legacy wallet chunk collecti
 
 ## Статус
 
-Planned / deferred until iteration 14 gets at least one successful full
-`main-pipeline` run.
+Started on 2026-05-06.
+
+Branch: `feature/iteration-15-collector-contract-wallet-stats`.
+
+Start gate satisfied:
+
+- iteration 14 is closed;
+- `main_branch` and `origin/main_branch` were fast-forwarded to the iteration
+  14 closing commit `cb11c3d`;
+- this branch was created from that commit and pushed with upstream tracking.
 
 ## Дата планирования
 
 2026-05-04
+
+## Work Status
+
+Current resume point:
+
+- iteration 15 is open;
+- no production data collection code has been changed in this iteration yet;
+- next required step is Phase 1 design review, because this work touches
+  SQLite, large tables, indexes, and future `wallet_stats` maintenance;
+- safe implementation scope after review is expected to start with the
+  collector wrapper and `legacy` default path.
+
+Local worktree note at start:
+
+- pre-existing unstaged local changes were present in
+  `make_project_archive.py`, `modules/teach_and_update_models/orchestrator.py`,
+  and untracked `data/models/trained_models/ElasticNet_*` artifacts;
+- they were intentionally not staged, committed, or reverted during iteration
+  start.
 
 ## Почему это отдельная итерация
 
