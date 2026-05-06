@@ -17,8 +17,13 @@ import json
 from sklearn.metrics import f1_score, precision_score, recall_score
 import warnings
 
+from settings.dask import configure_dask_dataframe_backend
+
+configure_dask_dataframe_backend()
+
 import dask.dataframe as dd
 from dask.distributed import Client, LocalCluster, wait
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from dask.delayed import delayed
@@ -38,10 +43,12 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
 
 class GeneralModel(): 
+    NON_FEATURE_COLUMNS = ('Action', 'Price', 'Predicted_Action', 'index')
+
     def __init__(self, model_info):
         self.model_info = model_info
         self.model_type = model_info['model']['type']
-        self.model_parameters = model_info['model']['model_param']
+        self.model_parameters = self.normalize_model_parameters(model_info['model']['model_param'])
         self.time_params = model_info['model']['time_params']
         self.comment = model_info['model'].get('comment', None)
         self.filter_params = model_info['model'].get('filters', None)
@@ -52,6 +59,22 @@ class GeneralModel():
         self.start_teaching_tmsp = None
         self.end_teaching_tmsp = None
         self.tmsps_data = None
+        self.model_feature_columns = None
+
+    @staticmethod
+    def normalize_model_parameters(model_parameters):
+        normalized_params = dict(model_parameters)
+        legacy_threshold = normalized_params.pop('threshold', None)
+        decision_threshold = normalized_params.get('decision_threshold')
+
+        if legacy_threshold is not None:
+            if decision_threshold is not None and decision_threshold != legacy_threshold:
+                raise ValueError(
+                    "Conflicting threshold and decision_threshold values in model parameters."
+                )
+            normalized_params['decision_threshold'] = legacy_threshold
+
+        return normalized_params
 
     def train_model_specific(self, cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test, seed=None):
         """
@@ -59,6 +82,41 @@ class GeneralModel():
         Должен быть реализован в подклассе.
         """
         pass
+
+    def prepare_feature_frame(self, data, feature_columns=None):
+        feature_frame = data.drop(columns=list(self.NON_FEATURE_COLUMNS), errors='ignore')
+        if feature_columns is None:
+            return feature_frame
+
+        missing_features = [column for column in feature_columns if column not in feature_frame.columns]
+        if missing_features:
+            raise ValueError(f"Missing features in prediction data: {missing_features}")
+
+        return feature_frame.loc[:, list(feature_columns)]
+
+    def log_model_contract(self, context, extra=None):
+        model_object = self.model
+        pipeline_steps = None
+        if hasattr(model_object, "named_steps"):
+            pipeline_steps = list(model_object.named_steps)
+
+        details = {
+            "context": context,
+            "model_type": self.model_type,
+            "decision_threshold": self.model_parameters.get("decision_threshold"),
+            "feature_count": (
+                len(self.model_feature_columns)
+                if self.model_feature_columns is not None
+                else None
+            ),
+            "feature_columns": self.model_feature_columns,
+            "model_object_type": type(model_object).__name__ if model_object is not None else None,
+            "pipeline_steps": pipeline_steps,
+        }
+        if extra:
+            details.update(extra)
+
+        logger.info("MODEL_CONTRACT %s", json.dumps(details, ensure_ascii=False, default=str))
         
     # def calculate_total_value(self, data):
     #     """
@@ -138,16 +196,23 @@ class GeneralModel():
 
 
     def calculate_total_value(self, data, dollar_qnt = 1000):
-        if isinstance(data, dd.DataFrame):
+        if do.is_dask_dataframe_like(data):
             data = data.persist().compute()
 
         model = self.model
-        threshold = self.model_parameters['threshold']
+        threshold = self.model_parameters['decision_threshold']
 
         # Начальные значения
         btc_qnt = 0
         already_bought = 0
-        data_copy = data.drop(columns=['Action', 'Price', 'Predicted_Action'], errors='ignore')
+        data_copy = self.prepare_feature_frame(data, self.model_feature_columns)
+        self.log_model_contract(
+            "profit_predict",
+            extra={
+                "prediction_rows": int(len(data_copy)),
+                "prediction_columns_count": int(len(data_copy.columns)),
+            },
+        )
         data_copy.to_parquet('data_copy_for_predictions.parquet')
         # print(data_copy.head())
         # Генерация предсказаний на основе модели
@@ -166,6 +231,22 @@ class GeneralModel():
         data['Predicted_Action'] = np.zeros_like(predictions, dtype=predictions.dtype)
         data.loc[predictions > threshold, 'Predicted_Action'] = 1
         data.loc[predictions < -threshold, 'Predicted_Action'] = -1
+        predicted_action_counts = data['Predicted_Action'].value_counts(dropna=False).to_dict()
+        logger.info(
+            "MODEL_PREDICTION_SUMMARY %s",
+            json.dumps(
+                {
+                    "rows": int(len(data)),
+                    "threshold": threshold,
+                    "predicted_action_counts": {
+                        str(key): int(value)
+                        for key, value in predicted_action_counts.items()
+                    },
+                },
+                ensure_ascii=False,
+                default=str,
+            ),
+        )
 
         data.to_parquet('data_after_predictions.parquet')
 
@@ -189,20 +270,36 @@ class GeneralModel():
         return total_final_value
 
 class ElasticNetModel(GeneralModel):
+    @staticmethod
+    def _elasticnet_pipeline_params(model_parameters):
+        return {
+            f"regressor__{key}": value
+            for key, value in model_parameters.items()
+        }
+
     def train_model_specific(self, cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test, n_splits=5, return_ = False, seed=None):
         from sklearn.linear_model import ElasticNet
         from sklearn.model_selection import StratifiedKFold
         # logger.info("Start train_model_specific")
         # logger.info(f'Параметры модели {self.model_parameters}')
-        model = ElasticNet(max_iter=10000) # max_iter тоже добавить в параметры модели? для теста парам грида
+        model = Pipeline([
+            ('scaler', StandardScaler()),
+            ('regressor', ElasticNet(max_iter=10000)),
+        ])
         # print('удалить после теста передачу cor_data_in_iteration_to_profit_test. или оставить для сравнения моделей')
         # X = cor_data_in_iteration_to_teach.drop(columns=['Action', 'Price'])
-        scaler = StandardScaler()
-        X = scaler.fit_transform(cor_data_in_iteration_to_teach.drop(columns=['Action', 'Price']))
-        X = pd.DataFrame(X, 
-                 columns=cor_data_in_iteration_to_teach.drop(columns=['Action', 'Price']).columns,  # # Изменено: сохраняем имена столбцов
-                 index=cor_data_in_iteration_to_teach.index)
+        train_features = self.prepare_feature_frame(cor_data_in_iteration_to_teach)
+        self.model_feature_columns = list(train_features.columns)
+
+        X = train_features
         logger.info("X for training")
+        self.log_model_contract(
+            "train_features_prepared",
+            extra={
+                "train_rows": int(len(X)),
+                "train_columns_count": int(len(X.columns)),
+            },
+        )
 
         # logger.info(X.head())
         self.model_X = X
@@ -228,6 +325,7 @@ class ElasticNetModel(GeneralModel):
                 y_train, y_test = y.iloc[train_index], y.iloc[test_index]
                 filtered_params = {key: value for key, value in self.model_parameters.items() if key != 'decision_threshold'}
                 filtered_params = model_params_with_seed(filtered_params, seed=seed)
+                filtered_params = self._elasticnet_pipeline_params(filtered_params)
                 
                 model.set_params(**filtered_params)
                 with warnings.catch_warnings(record=True) as w:
@@ -258,6 +356,7 @@ class ElasticNetModel(GeneralModel):
             # Выполняем одну итерацию обучения
             filtered_params = {key: value for key, value in self.model_parameters.items() if key != 'decision_threshold'}
             filtered_params = model_params_with_seed(filtered_params, seed=seed)
+            filtered_params = self._elasticnet_pipeline_params(filtered_params)
             model.set_params(**filtered_params)
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("always")

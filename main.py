@@ -15,10 +15,7 @@ from modules.logger.runtime_bootstrap import (
 
 
 if __name__ == "__main__":
-
     args = parse_args()
-    # print(args)
-
     tracker, logger = start_runtime_logging(args)
 
     try:

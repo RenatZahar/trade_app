@@ -89,6 +89,12 @@ def get_secs_in_month():
 def get_secs_in_day():
     return 24*60*60
 
+def get_period_seconds(time_params, days_key, months_key):
+    days_value = time_params.get(days_key)
+    if days_value is not None:
+        return days_value * get_secs_in_day()
+    return time_params.get(months_key, 0) * get_secs_in_month()
+
 def get_tmsps_data_of_model(time_params):
     iterations = time_params['iterations']
     max_block_height, last_block_time = do.get_last_block_info()
@@ -99,9 +105,24 @@ def get_tmsps_data_of_model(time_params):
     tmsps_of_iterations = {}
     for iter in range(iterations, 0, -1):
         tmsps_of_iterations[iter] = {}
-        if time_params['model_relevance_period_months'] and iter == iterations:
+        model_relevance_period_sec = get_period_seconds(
+            time_params,
+            "model_relevance_period_days",
+            "model_relevance_period_months",
+        )
+        profit_test_sec = get_period_seconds(
+            time_params,
+            "profit_test_days",
+            "profit_test_months",
+        )
+        training_data_duration_sec = get_period_seconds(
+            time_params,
+            "training_data_duration_days",
+            "training_data_duration_months",
+        )
+        if model_relevance_period_sec and iter == iterations:
             model_relevance_start_tmsp = last_block_time
-            model_relevance_end_tmsp = model_relevance_start_tmsp + time_params['model_relevance_period_months']*get_secs_in_month()
+            model_relevance_end_tmsp = model_relevance_start_tmsp + model_relevance_period_sec
             tmsps_of_iterations[iter]['model_relevance_start_tmsp'] = model_relevance_start_tmsp
             tmsps_of_iterations[iter]['model_relevance_end_tmsp'] = model_relevance_end_tmsp
             checkpoint_tmsp = model_relevance_start_tmsp - 1
@@ -109,15 +130,15 @@ def get_tmsps_data_of_model(time_params):
             if profit_test_start_tmsp:
                 checkpoint_tmsp = profit_test_start_tmsp - 1
 
-        if time_params['profit_test_months']:
+        if profit_test_sec:
             profit_test_end_tmsp = checkpoint_tmsp
-            profit_test_start_tmsp = profit_test_end_tmsp - time_params['profit_test_months']*get_secs_in_month()
+            profit_test_start_tmsp = profit_test_end_tmsp - profit_test_sec
             tmsps_of_iterations[iter]['profit_test_start_tmsp'] = profit_test_start_tmsp
             tmsps_of_iterations[iter]['profit_test_end_tmsp'] = profit_test_end_tmsp
             checkpoint_tmsp = profit_test_start_tmsp - 1
-        if time_params['training_data_duration_months']:
+        if training_data_duration_sec:
             teaching_end_tmsp = checkpoint_tmsp
-            teaching_start_tmsp = teaching_end_tmsp - time_params['training_data_duration_months']*get_secs_in_month()
+            teaching_start_tmsp = teaching_end_tmsp - training_data_duration_sec
             tmsps_of_iterations[iter]['teaching_start_tmsp'] = teaching_start_tmsp
             tmsps_of_iterations[iter]['teaching_end_tmsp'] = teaching_end_tmsp
             checkpoint_tmsp = teaching_start_tmsp - 1

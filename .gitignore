@@ -12,6 +12,7 @@ venv/
 env/
 .env
 .venv
+.venv_*/
 .myenv
 .vscode/
 .idea/

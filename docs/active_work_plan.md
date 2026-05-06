@@ -32,6 +32,21 @@ As of 2026-05-04:
   `877672` through SQL-vs-BTC comparison with `all_blocks_identical`.
 - Iteration `14 - Main ML pipeline correctness` is opened on branch
   `feature/iteration-14-main-pipeline-correctness`.
+- During iteration 14 the project `.venv` was upgraded to the latest verified
+  Python `3.12.2` dependency stack recorded in `requirements.lock.txt`.
+  Dask/distributed are now `2026.3.0`; Dask dataframe query-planning is enabled
+  for Dask `2025+` because the legacy dataframe backend is no longer supported
+  by current Dask.
+- Cost-control rules for long Codex sessions are recorded in
+  `docs/codex_cost_control.md`. Prefer new-chat handoffs for each major phase
+  instead of carrying a very long conversational context.
+- After the dependency upgrade, scenario validation is still open. Use
+  `scripts/run_main_pipeline_smoke.py --days 7` as a short compatibility check
+  before repeating a full `main-pipeline` run, and validate other scenarios
+  separately instead of treating `--start_parser` as a normal finite test.
+- Iteration `15 - Main pipeline collector contract and wallet_stats data
+  collection` is planned in `docs/iterations/iteration_15.md`, but should start
+  only after iteration 14 gets at least one successful full `main-pipeline` run.
 - The former broad ML/trading validation scope is kept in this file as the
   follow-up roadmap, not as a single oversized iteration.
 
@@ -69,6 +84,20 @@ Expected validation:
 
 - focused unit/smoke tests around the fixed contracts;
 - rerun known model/profit-test scenarios only after these fixes.
+
+Near-term collector direction:
+
+- first get at least one successful full `main-pipeline` run with the current
+  corrected contracts;
+- detailed collector plan lives in `docs/iterations/iteration_15.md`;
+- then introduce a collector contract instead of creating separate top-level
+  scenarios:
+  - default `legacy` collector wraps the current collection path;
+  - future `wallet-stats` collector returns the same train/profit-test DataFrame
+    contract;
+  - CLI/config can later expose `main-pipeline --collector legacy|wallet-stats`;
+- defer separate temp/model output dirs and param grid integration until the
+  main pipeline collector contract is stable.
 
 Detailed backlog from the earlier broad plan:
 

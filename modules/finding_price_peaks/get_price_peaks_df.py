@@ -16,7 +16,7 @@ os.chdir(script_dir)
 CLEARED_PRICES_DIR_FILE = CLEARED_PRICES_DIR / f"smoothed_BTCUSDT_{line_time_duration_min}min.parquet"
 
 def update_peaks():
-    logger.warning('сделать раз в день перезапуск get_peaks')
+    logger.info('TODO: сделать раз в день перезапуск get_peaks')
     should_rebuild_peaks = True
     yesterday_midnight = pnt.get_yesterday_midnight()
     if os.path.exists(BTC_PRICES_WITH_PEAKS_AND_INTERVALS_FILE):

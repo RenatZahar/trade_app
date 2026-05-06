@@ -10,6 +10,7 @@ from modules.logger.experiment_metadata import summarize_grid_metadata
 from modules.logger.run_tracker import get_current_run_tracker
 from modules.logger.runtime_bootstrap import update_runtime_metadata
 from .determinism import sample_fraction
+from settings.main_pipeline import MAIN_PIPELINE_CORRELATION_CHUNK_SIZE
 from settings.paths import NEW_PARAM_GRID_DIR, PARAM_GRID_DIR, PARAM_GRID_RESULTS
 from settings.paths import BLOCKS_SQL_DATA
 from . import service_funcs as sf
@@ -23,6 +24,32 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 
 os.chdir(script_dir)
 
+
+def _summarize_dataframe_for_log(name, df):
+    summary = {
+        "name": name,
+        "rows": int(len(df)),
+        "columns_count": int(len(df.columns)),
+        "columns": list(df.columns),
+    }
+    if "Timestamp" in df.columns and not df.empty:
+        summary["timestamp_min"] = int(df["Timestamp"].min())
+        summary["timestamp_max"] = int(df["Timestamp"].max())
+    if "Action" in df.columns and not df.empty:
+        action_counts = df["Action"].value_counts(dropna=False).to_dict()
+        summary["action_counts"] = {
+            str(key): int(value) for key, value in action_counts.items()
+        }
+    return summary
+
+
+def log_dataframe_summary(name, df):
+    logger.info(
+        "PIPELINE_DATA_SUMMARY %s",
+        json.dumps(_summarize_dataframe_for_log(name, df), ensure_ascii=False),
+    )
+
+
 def main_processing_model_orchestra(model, TEST, seed=None):
     tracker = get_current_run_tracker()
 
@@ -31,13 +58,13 @@ def main_processing_model_orchestra(model, TEST, seed=None):
         # посмтроить иерархию - сначала разные параметры 
         # data_for_teach_df -> model_param ->.........додумать
 
-    logger.warning('изучить возможноть использовать во временном ряду не только куммулятывных сумм но и скользящего среднего')
+    logger.info('TODO: изучить возможность использовать во временном ряду не только кумулятивные суммы, но и скользящее среднее')
     warn_required_data_table_indexes(BLOCKS_SQL_DATA, "teaching.correlation_pipeline")
     if TEST:
         logger.info("Тестовый режим")
         logger.info(f"Кол-во кошельков в тесте: {round((TEST*100), 2)} %")
 
-    chunk_size = 180
+    chunk_size = MAIN_PIPELINE_CORRELATION_CHUNK_SIZE
     time_params = model.time_params
     model.tmsps_data = sf.get_tmsps_data_of_model(time_params)
     # print(model.tmsps_data)
@@ -52,7 +79,10 @@ def main_processing_model_orchestra(model, TEST, seed=None):
                 stage_data = tracker.start_stage('features.correlation_data')
                 app_logger_module.log_tracker_stage_started(tracker, stage_data)
             cor_data_in_iteration_to_teach, cor_data_in_iteration_to_profit_test  = do.get_corelation_by_tmsp_df(TEST, filter_params, correlation_type, tmps, chunk_size, seed=seed)
+            log_dataframe_summary("train_raw_before_clean", cor_data_in_iteration_to_teach)
+            log_dataframe_summary("profit_raw_before_clean", cor_data_in_iteration_to_profit_test)
             cor_data_in_iteration_to_teach = do.clean_data(cor_data_in_iteration_to_teach)
+            log_dataframe_summary("train_after_clean", cor_data_in_iteration_to_teach)
         
             if cor_data_in_iteration_to_profit_test.empty:
                 if tracker:
@@ -61,6 +91,7 @@ def main_processing_model_orchestra(model, TEST, seed=None):
                 logger.info("Empty profit test data. Stop teaching.")
                 continue
             cor_data_in_iteration_to_profit_test = do.clean_data(cor_data_in_iteration_to_profit_test)
+            log_dataframe_summary("profit_after_clean", cor_data_in_iteration_to_profit_test)
             if tracker:
                 stage_data = tracker.finish_stage('success', details=f'iteration={iteration}')
                 app_logger_module.log_tracker_stage_finished(tracker, stage_data)
@@ -157,7 +188,7 @@ def teaching_with_param_grid_orchestrator(TEACHING_TEST, seed=None):
             cor_data_in_iteration_to_teach.to_parquet(os.path.join(PARAM_GRID_RESULTS, f'cor_data_in_1_iteration_to_teach.parquet'))
             cor_data_in_iteration_to_profit_test.to_parquet(os.path.join(PARAM_GRID_RESULTS, f'cor_data_in_1_iteration_to_profit_test.parquet'))
         
-        logger.warning('ПЕРЕПИСАТЬ ПОД ДАСК')
+        logger.info('TODO: переписать param grid под Dask')
         with ProcessPoolExecutor(max_workers=8) as executor:
             futures = []
             for index, param in enumerate(group_of_grid):

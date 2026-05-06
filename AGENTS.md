@@ -8,6 +8,8 @@
   deferred, and next.
 - Treat `docs/maintenance_guidelines.md` as the source of truth for SQLite, bulk data, index, and maintenance work.
 - Treat `docs/junior_plus_program.md` and `docs/iterations/` as project process and roadmap context.
+- Treat the `## Work Status` section inside the active iteration document as
+  the primary resume point when continuing work across chats.
 - Check `git status` before editing. Never revert or overwrite user changes unless explicitly requested.
 
 ## Instruction Priority
@@ -23,6 +25,37 @@
 - Use discuss-plan-execute for substantial, ambiguous, architectural, refactoring, research, or multi-phase work.
 - In discuss-plan-execute, first state the current understanding, risks, options, and phased plan. Implement only the selected or clearly safe phase.
 - For review requests, use a review stance: findings first, grounded in file/line references, and do not edit files unless asked.
+
+## Refactor Entry Check
+
+- At the start of an iteration or substantial phase that may refactor existing
+  code, first run a logic trace to identify useful intervention points before
+  editing.
+- The logic trace should state:
+  - caller responsibility;
+  - callee responsibility;
+  - duplicated responsibility;
+  - dead or unclear code;
+  - observable contract and narrow verification.
+- Use this for existing-code restructuring, simplifying old logic, moving
+  responsibilities between functions, or removing suspected redundant code.
+- Do not require this ceremony for clearly new code, smoke tests, technical
+  documentation, log wording, argparse details, small pure-function tests, or
+  other narrow local tasks where the responsibility boundary is already clear.
+
+## Cost Control Mode
+
+- For large tasks, first give a short plan and wait for confirmation unless the
+  user explicitly asked to execute immediately.
+- Do not perform broad audits without an explicit request.
+- Do not read large logs end-to-end; first search by run_id, stage, error text,
+  or timestamp and then read the smallest useful slice.
+- Do not use web search when the question can be answered from local project
+  context.
+- For documentation and small fixes, keep diffs minimal.
+- When the chat context becomes long or the task scope changes materially,
+  suggest a new chat and write a short handoff summary into the active iteration
+  document before continuing.
 
 ## Hard Stop: Data and Maintenance Safety
 
@@ -48,6 +81,8 @@
 - Use `$discuss-plan-execute` for substantial or ambiguous work that should be framed before editing.
 - Use `$review-python-module` when asked to review Python code or patches without editing.
 - Use `$iteration-workflow` when starting, continuing, closing, merging, or creating a project iteration.
+- Use `$iteration-handoff` when continuing an iteration in a new chat, updating
+  Work Status, writing handoff context, or reducing chat context/cost.
 - Use `$experiment-protocol` when working with experiments, competing approaches, temporary experimental code, or performance hypotheses.
 - Do not let a meta-skill or retrospective rewrite project instructions automatically. Propose instruction changes and wait for explicit confirmation.
 

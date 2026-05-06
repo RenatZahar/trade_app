@@ -58,7 +58,7 @@ def clean_downloaded_df(data):
     price_data_df.set_index('Open time', inplace=True)
 
    
-    resampled_data = price_data_df['Price'].resample(f'{LINE_TIME_DURATION_MIN}T').mean().reset_index()
+    resampled_data = price_data_df['Price'].resample(f'{LINE_TIME_DURATION_MIN}min').mean().reset_index()
 
     resampled_data['Timestamp'] = resampled_data['Open time'].astype('int64') // 10**9
 

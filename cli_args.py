@@ -58,6 +58,10 @@ def validate_cli_args(parser: argparse.ArgumentParser, args: argparse.Namespace)
     if any(value is not None and value < 0 for value in parser_cache_overrides):
         parser.error("Parser cache limits must be greater than or equal to 0")
 
+    if args.command == "param-grid":
+        if args.test_fraction is not None and not 0 <= args.test_fraction <= 1:
+            parser.error("--test-fraction must be between 0 and 1")
+
     if args.command == "test" and args.data_test == "downloaded-from-btc-data":
         try:
             args.blocks = parse_blocks_arg(args.blocks)
