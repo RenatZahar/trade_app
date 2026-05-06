@@ -7,7 +7,7 @@ pipeline перед доверием к model/profit-test результатам
 
 ## Статус
 
-Started
+Done
 
 ## Restore point
 
@@ -2153,7 +2153,7 @@ Use this section as the startup context for the next chat.
 
 ```text
 Проект: I:\projects\trade_app_project.
-Активная итерация: 14 - Main ML pipeline correctness.
+Активная итерация 14 закрыта: Main ML pipeline correctness.
 Работаем в cost-control mode:
 - без broad audit без подтверждения;
 - не читать большие логи целиком;
@@ -2170,28 +2170,87 @@ Restore point:
 - commit/tag: cad3a11 / restore/iteration-14-start.
 
 Текущий технический фокус:
-- получить хотя бы один успешный main-pipeline/smoke после обновления
-  зависимостей;
-- текущий known failure после run 141:
-  'MergeAsof' object has no attribute 'how';
-- перед этим run 141 успешно прошел correlation chunk processing:
-  successful_chunks=237 total_chunks=237.
-
-Последняя выбранная правка:
-- оставить dd.merge_asof;
-- добавить tolerance из settings.price_peaks.line_time_duration_min;
-- добавить DASK_DATAFRAME_STATE checkpoints после merge_asof/groupby/merge.
+- iteration 14 закрыла correctness/compatibility gate;
+- full run 150 успешно дошел до profit-test после Dask merge_asof parquet
+  checkpoint;
+- profit-test result from run 150 is not model-quality evidence because model
+  produced no buy signals.
 
 Не трогать без отдельного согласования:
 - SQLite maintenance, indexes, bulk data mutations;
 - parser runtime behavior;
-- большой redesign collector/wallet_stats до успешного текущего pipeline run.
+- большой redesign collector/wallet_stats вне отдельной iteration 15 plan.
 
 Следующий узкий шаг:
-- запустить narrow tests вокруг data_operations/time-window contract;
-- затем выполнить короткий smoke или full main-pipeline run и смотреть только
-  новые строки лога по run_id.
+- выбрать следующий workstream: profit-test trustworthiness, param-grid,
+  Dask performance ladder, или iteration 15 collector/wallet_stats;
+- для Dask performance следующий planned trial:
+  24GB / 4 workers / 2 threads, chunk_size=150.
 ```
+
+### Phase 6 result - 2026-05-06
+
+Iteration 14 is closed.
+
+Final result:
+
+- Core train/predict/profit-test correctness contracts were fixed and covered
+  by focused unit-smoke tests:
+  - preprocessing contract;
+  - accidental `index` feature leakage;
+  - timestamp range filtering;
+  - feature schema contract;
+  - `threshold` / `decision_threshold` contract.
+- Dask/distributed `2026.3.0` compatibility was restored for the full
+  `main-pipeline` path by keeping `dd.merge_asof(...)` and adding a parquet
+  checkpoint after the problematic graph segment.
+- Full run `150` completed successfully:
+  - `successful_chunks=481 total_chunks=1435`;
+  - `features.correlation_data`: `01:20:09`;
+  - total run: `01:21:02`;
+  - checkpoint marker: `merged_after_asof_checkpoint_read_parquet`;
+  - profit-test reached and model artifact saved.
+- Run `150` result is intentionally treated as engineering evidence only, not
+  model-quality evidence:
+  - profit-test rows: `8,640`;
+  - predicted actions: `0=8638`, `-1=2`, `1=0`;
+  - no buy signal was produced, so `profit=1000.0` means all-cash/no-trade
+    behavior.
+- Runtime production references to legacy `few_tx_wallets` / `TXS_MOVED` were
+  removed. Historical experiment notes can still mention them.
+- Active `param-grid` planning was moved to
+  `docs/future_development_backlog.md`, section
+  `1.2 Проверка и оптимизация param-grid`.
+- `docs/active_work_plan.md` was cleaned so future chats use it as a short
+  selector instead of a stale detailed backlog.
+
+Checks:
+
+- `.venv\Scripts\python.exe -m pytest tests\unit_smoke\test_correlation_pipeline_contracts.py tests\unit_smoke\test_dependency_runtime_contracts.py -q`
+  - result: `21 passed`.
+- `.venv\Scripts\python.exe -m pytest tests\unit_smoke -q`
+  - result after tracked cleanup: `102 passed, 1 warning`.
+- Full runtime validation:
+  - `python main.py main-pipeline`, run `150`, status `success`.
+
+Known warnings and follow-up:
+
+- Dask performance tuning remains open and should use the documented ladder,
+  starting with `24GB / 4 workers / 2 threads`, `chunk_size=150`.
+- Profit-test trustworthiness remains open; the next work should explain and
+  baseline all-cash/no-buy behavior before interpreting model results.
+- `param-grid` viability and cache/artifact contract remain future work.
+- Collector/wallet_stats redesign belongs to iteration 15 and must follow the
+  data safety protocol before SQLite or bulk-data changes.
+
+README impact: none.
+
+Reason:
+
+- Public CLI commands already documented in README did not change.
+- Runtime logging/artifact behavior still fits the existing README sections.
+- New details are internal iteration notes and future-work planning, so they
+  are recorded here and in `docs/future_development_backlog.md`.
 
 ## Definition of Done
 
