@@ -1,4 +1,5 @@
 import pprint
+import sitecustomize  # noqa: F401
 import pandas as pd
 from scipy.signal import find_peaks  # type: ignore
 import itertools

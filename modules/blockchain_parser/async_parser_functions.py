@@ -1,4 +1,6 @@
 # async_parser_functions.py
+import sitecustomize  # noqa: F401
+
 import statistics
 import copy
 import pandas as pd
@@ -24,6 +26,8 @@ from modules.redis_init.redis_init import send_message
 from settings.paths import CLEARED_PRICES_DIR
 from settings.parser import (
     REQUESTS_QUANTITY,
+    ASYNC_RPC_BATCH_SIZE,
+    MAX_CONCURRENT_BLOCK_TASKS,
     MIN_VALUE_THRESHOLD,
     MAX_LINES_IN_TX_CACHE,
     MAX_LINES_IN_HASH_CACHE,
@@ -53,6 +57,27 @@ print_lock = asyncio.Lock()
 save_semaphore = asyncio.Semaphore(MAX_SAVE_TASKS) #пока дожидаемся сохранения перед след циклом загрузки
 import logging
 logger = logging.getLogger("app")
+
+
+def split_rpc_commands(commands, batch_size):
+    if batch_size <= 0:
+        raise ValueError("batch_size must be greater than 0")
+    for index in range(0, len(commands), batch_size):
+        yield commands[index:index + batch_size]
+
+
+def build_json_rpc_requests(rpc_method, request_id_offset=0, *args):
+    if rpc_method is None:
+        return [
+            {
+                "method": method,
+                "params": params,
+                "jsonrpc": "2.0",
+                "id": request_id_offset + index,
+            }
+            for index, (method, params) in enumerate(args[0])
+        ]
+    return [{"method": rpc_method, "params": args, "jsonrpc": "2.0", "id": request_id_offset}]
 
 
 def extract_json_rpc_results(json_response, expected_count=None):
@@ -108,7 +133,91 @@ def get_cache_metadata() -> dict:
         "tx_cache_current_rows": len(tx_cache),
         "blocks_hash_cache_current_rows": len(blocks_hash_cache),
     }
-    
+
+
+def configure_parser_load_limits(
+    requests_quantity=None,
+    max_save_tasks=None,
+    async_rpc_batch_size=None,
+    max_concurrent_block_tasks=None,
+):
+    global REQUESTS_QUANTITY, MAX_SAVE_TASKS, save_semaphore
+    global ASYNC_RPC_BATCH_SIZE, MAX_CONCURRENT_BLOCK_TASKS
+
+    if requests_quantity is not None:
+        requests_quantity = int(requests_quantity)
+        if requests_quantity <= 0:
+            raise ValueError("requests_quantity must be greater than 0")
+        REQUESTS_QUANTITY = requests_quantity
+
+    if async_rpc_batch_size is not None:
+        async_rpc_batch_size = int(async_rpc_batch_size)
+        if async_rpc_batch_size <= 0:
+            raise ValueError("async_rpc_batch_size must be greater than 0")
+        ASYNC_RPC_BATCH_SIZE = async_rpc_batch_size
+
+    if max_concurrent_block_tasks is not None:
+        max_concurrent_block_tasks = int(max_concurrent_block_tasks)
+        if max_concurrent_block_tasks <= 0:
+            raise ValueError("max_concurrent_block_tasks must be greater than 0")
+        MAX_CONCURRENT_BLOCK_TASKS = max_concurrent_block_tasks
+
+    if max_save_tasks is not None:
+        max_save_tasks = int(max_save_tasks)
+        if max_save_tasks <= 0:
+            raise ValueError("max_save_tasks must be greater than 0")
+        MAX_SAVE_TASKS = max_save_tasks
+        save_semaphore = asyncio.Semaphore(MAX_SAVE_TASKS)
+
+    return get_parser_load_metadata()
+
+
+def get_parser_load_metadata() -> dict:
+    return {
+        "requests_quantity": REQUESTS_QUANTITY,
+        "async_rpc_batch_size": ASYNC_RPC_BATCH_SIZE,
+        "max_concurrent_block_tasks": MAX_CONCURRENT_BLOCK_TASKS,
+        "max_save_tasks": MAX_SAVE_TASKS,
+    }
+
+
+def is_coinbase_tx(tx_details):
+    if not tx_details:
+        return False
+    return any("coinbase" in vin_entry for vin_entry in tx_details.get("vin", []))
+
+
+def count_vout_links_for_tx_ids(prev_tx_vout_to_current_tx_map, tx_ids):
+    tx_id_set = set(tx_ids)
+    return sum(
+        len(vout_to_tx_map)
+        for tx_id, vout_to_tx_map in prev_tx_vout_to_current_tx_map.items()
+        if tx_id in tx_id_set
+    )
+
+
+def build_vin_record_gap_summary(
+    *,
+    actual_records_count,
+    vout_links_count,
+    coinbase_filtered_links,
+):
+    expected_records_count = max(vout_links_count - coinbase_filtered_links, 0)
+    unexplained_missing_count = max(expected_records_count - actual_records_count, 0)
+    unexplained_missing_pct = (
+        (unexplained_missing_count / expected_records_count) * 100
+        if expected_records_count
+        else 0
+    )
+    return {
+        "actual_records_count": actual_records_count,
+        "vout_links_count": vout_links_count,
+        "coinbase_filtered_links": coinbase_filtered_links,
+        "expected_records_count": expected_records_count,
+        "unexplained_missing_count": unexplained_missing_count,
+        "unexplained_missing_pct": round(unexplained_missing_pct, 4),
+    }
+     
 def retry(max_attempts=3, delay=1, exceptions=(Exception,)):
     def decorator(func):
         @wraps(func)
@@ -513,45 +622,78 @@ async def async_rpc_connection(rpc_method, height, *args):
     headers = {'content-type': 'application/json', 'Connection': 'close'}
     timeout = ClientTimeout(total=360)
     last_exception = None
+    if rpc_method is None:
+        command_batches = list(split_rpc_commands(args[0], ASYNC_RPC_BATCH_SIZE))
+    else:
+        command_batches = [None]
+
+    results = []
+    request_id_offset = 0
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        for i in range(150):  
-            if last_request_time is not None:
-                elapsed_time = time.time() - last_request_time
-                if elapsed_time < 1:
-                    await asyncio.sleep(1 - elapsed_time)
+        for batch_index, command_batch in enumerate(command_batches):
             if rpc_method is None:
-                requests = [{"method": method, "params": params, "jsonrpc": "2.0", "id": i} for method, params in args[0]]
+                requests = build_json_rpc_requests(
+                    None,
+                    request_id_offset,
+                    command_batch,
+                )
             else:
-                requests = [{"method": rpc_method, "params": args, "jsonrpc": "2.0", "id": 0}]
+                requests = build_json_rpc_requests(rpc_method, request_id_offset, *args)
+            request_id_offset += len(requests)
+            logger.info(
+                "async_rpc batch: block=%s batch=%s/%s requests=%s",
+                height,
+                batch_index + 1,
+                len(command_batches),
+                len(requests),
+            )
 
-            try:
-                attempt = 0
-                async with session.post(url, data=json.dumps(requests), headers=headers) as response:
-                    if response.status == 200:
-                        json_response = await response.json()
-                        return extract_json_rpc_results(
-                            json_response,
-                            expected_count=len(requests),
-                        )
+            for attempt in range(150):
+                if last_request_time is not None:
+                    elapsed_time = time.time() - last_request_time
+                    if elapsed_time < 1:
+                        await asyncio.sleep(1 - elapsed_time)
 
-                    else:
-                        attempt += 1
+                try:
+                    async with session.post(url, data=json.dumps(requests), headers=headers) as response:
+                        last_request_time = time.time()
+                        if response.status == 200:
+                            json_response = await response.json()
+                            results.extend(
+                                extract_json_rpc_results(
+                                    json_response,
+                                    expected_count=len(requests),
+                                )
+                            )
+                            break
+
                         error_text = await response.text()
                         if 'Work queue depth exceeded' in error_text:
+                            logger.warning(
+                                "Bitcoin Core RPC work queue exceeded: block=%s batch=%s/%s "
+                                "requests=%s attempt=%s",
+                                height,
+                                batch_index + 1,
+                                len(command_batches),
+                                len(requests),
+                                attempt + 1,
+                            )
                             await asyncio.sleep(2)
                             continue
                         logger.error(f'Ошибка запроса: {response.status}, {error_text}')
-                        await asi_sleep(attempt)
+                        await asi_sleep(attempt + 1)
 
-            except Exception as e:
-                last_exception = e
-                logger.error(f'Ошибка запроса: {e}, блок {height}')
-                logger.error(f'Попытка {i+1}')
-                logger.error("Исключение при async RPC-запросе", exc_info=True)
-                await asyncio.sleep(10)  # Задержка перед повторной попыткой
+                except Exception as e:
+                    last_exception = e
+                    logger.error(f'Ошибка запроса: {e}, блок {height}')
+                    logger.error(f'Попытка {attempt+1}')
+                    logger.error("Исключение при async RPC-запросе", exc_info=True)
+                    await asyncio.sleep(10)
+            else:
+                logger.error("Не удалось установить соединение после 150 попыток.")
+                raise RuntimeError("Не удалось установить соединение после 150 попыток.") from last_exception
 
-        logger.error("Не удалось установить соединение после 150 попыток.")
-        raise RuntimeError("Не удалось установить соединение после 150 попыток.") from last_exception
+    return results
 
 async def asi_sleep(attempt):
     if attempt > 50 and attempt < 100:
@@ -617,9 +759,24 @@ def get_transactions_of_blocks(block_list, rpc_connection):
 async def process_all_blocks(heights, blocks_hashes, block_times, transactions_of_groups_of_block, btc_price, rpc_connection):
     tasks = []
     number = len(heights)
+    block_semaphore = asyncio.Semaphore(MAX_CONCURRENT_BLOCK_TASKS)
+
+    async def process_block_with_limit(index):
+        async with block_semaphore:
+            return await process_block(
+                index,
+                number,
+                heights[index],
+                blocks_hashes[index],
+                block_times[index],
+                transactions_of_groups_of_block[index],
+                btc_price,
+                rpc_connection,
+            )
+
     # Перебираем все блоки и создаём задачу для каждого
     for index in range(len(heights)):
-        task = asyncio.create_task(process_block(index, number, heights[index], blocks_hashes[index], block_times[index], transactions_of_groups_of_block[index], btc_price, rpc_connection))
+        task = asyncio.create_task(process_block_with_limit(index))
         tasks.append(task)
     # Одновременное выполнение всех задач
     results = await asyncio.gather(*tasks)
@@ -781,16 +938,37 @@ async def cleaning_tx_vin_data(
         logger.info(f'Блок {height}, {index+1}/{number}. Получение данных по vin, транзакций: {len(prev_tx_details_list)}')
 
     with timed_step("block.vin_filter_merge", block=height) as timing:
+        all_prev_tx_details = prev_tx_details_list + prev_tx_details_list_cache
+        coinbase_prev_tx_ids = {
+            tx_details["txid"]
+            for tx_details in all_prev_tx_details
+            if tx_details is not None
+            and tx_details
+            and tx_details.get("txid")
+            and is_coinbase_tx(tx_details)
+        }
+        coinbase_filtered_links = count_vout_links_for_tx_ids(
+            prev_tx_vout_to_current_tx_map,
+            coinbase_prev_tx_ids,
+        )
         prev_tx_details_list = [
             tx_details for tx_details in prev_tx_details_list
             if tx_details is not None and
             tx_details and  # Проверка на непустоту tx_details
-            not any('coinbase' in vin_entry for vin_entry in tx_details.get('vin', []))
+            not is_coinbase_tx(tx_details)
                                 ]
 
+        prev_tx_details_list_cache = [
+            tx_details for tx_details in prev_tx_details_list_cache
+            if tx_details is not None and
+            tx_details and
+            not is_coinbase_tx(tx_details)
+        ]
         prev_tx_details_list.extend(prev_tx_details_list_cache)
         prev_tx_details_list_cache = []
         timing["transactions"] = len(prev_tx_details_list)
+        timing["coinbase_filtered_prev_txs"] = len(coinbase_prev_tx_ids)
+        timing["coinbase_filtered_links"] = coinbase_filtered_links
 
     with timed_step("block.vin_records_built", block=height) as timing:
         records = []
@@ -822,18 +1000,45 @@ async def cleaning_tx_vin_data(
         prev_tx_vout_to_current_tx_map = {}
         dwn_prev_tx_details_dict = {}
         timing["records"] = len(records)
+    gap_summary = build_vin_record_gap_summary(
+        actual_records_count=len(records),
+        vout_links_count=vout_to_tx_map_count,
+        coinbase_filtered_links=coinbase_filtered_links,
+    )
     logger.info(f'Блок {height}, {index+1}/{number}. Команд {len(commands)}, из кэша {prev_tx_details_list_cache_count}, сумма {len(commands)+prev_tx_details_list_cache_count}, сколько скачать надо {prev_tx_id_count}')
     logger.info(f'Блок {height}, {index+1}/{number}. Всего скачанных записей с продажей {len(records)}, должно равняться {vout_to_tx_map_count}')
-    if len(records) != vout_to_tx_map_count:
-        logger.warning(f'Блок {height}, {index+1}/{number}. Разница между нужно было скачать и было скачано: {(vout_to_tx_map_count - len(records))}, {round(((vout_to_tx_map_count - len(records))/vout_to_tx_map_count*100), 4)} %')
+    logger.info(
+        "Блок %s, %s/%s. vin gap summary: coinbase_filtered_links=%s "
+        "expected_records_after_allowed_exclusions=%s actual_records=%s "
+        "unexplained_missing=%s unexplained_missing_pct=%s",
+        height,
+        index + 1,
+        number,
+        gap_summary["coinbase_filtered_links"],
+        gap_summary["expected_records_count"],
+        gap_summary["actual_records_count"],
+        gap_summary["unexplained_missing_count"],
+        gap_summary["unexplained_missing_pct"],
+    )
+    if gap_summary["unexplained_missing_count"]:
+        logger.warning(
+            "Блок %s, %s/%s. Необъясненная разница между нужно было скачать "
+            "и было скачано: %s, %s %%",
+            height,
+            index + 1,
+            number,
+            gap_summary["unexplained_missing_count"],
+            gap_summary["unexplained_missing_pct"],
+        )
         
     # допускаем 3 процентов расхождения
-    upper_limit = vout_to_tx_map_count + (vout_to_tx_map_count * 0.03)
-    lower_limit = vout_to_tx_map_count - (vout_to_tx_map_count * 0.03)
+    expected_records_count = gap_summary["expected_records_count"]
+    upper_limit = expected_records_count + (expected_records_count * 0.03)
+    lower_limit = expected_records_count - (expected_records_count * 0.03)
     if len(records) > upper_limit or len(records) < lower_limit:
         logger.warning(f"Блок {height}, {index+1}/{number}")
         logger.warning("БОЛЬШАЯ РАЗНИЦА!")
-    if (vout_to_tx_map_count - len(records))/vout_to_tx_map_count*100 > 20:
+    if gap_summary["unexplained_missing_pct"] > 20:
         logger.warning('Разница больше 20 процентов')
         send_message('parser_status', 'completed with error')
         raise Exception("Разница больше 20 процентов между нужно было загрузить и загружено")

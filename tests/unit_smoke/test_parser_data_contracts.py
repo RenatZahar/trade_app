@@ -147,3 +147,97 @@ def test_extract_json_rpc_results_returns_ordered_results():
     )
 
     assert results == [{"txid": "a"}, {"txid": "b"}]
+
+
+def test_split_rpc_commands_limits_async_batch_size():
+    commands = [["getrawtransaction", [f"tx_{index}", 1]] for index in range(5)]
+
+    batches = list(apf.split_rpc_commands(commands, 2))
+
+    assert [len(batch) for batch in batches] == [2, 2, 1]
+    assert batches[0][0] == ["getrawtransaction", ["tx_0", 1]]
+
+
+def test_build_json_rpc_requests_uses_stable_incrementing_ids():
+    requests = apf.build_json_rpc_requests(
+        None,
+        10,
+        [
+            ["getrawtransaction", ["tx_a", 1]],
+            ["getrawtransaction", ["tx_b", 1]],
+        ],
+    )
+
+    assert requests == [
+        {
+            "method": "getrawtransaction",
+            "params": ["tx_a", 1],
+            "jsonrpc": "2.0",
+            "id": 10,
+        },
+        {
+            "method": "getrawtransaction",
+            "params": ["tx_b", 1],
+            "jsonrpc": "2.0",
+            "id": 11,
+        },
+    ]
+
+
+def test_configure_parser_load_limits_tracks_rpc_and_block_concurrency():
+    original = apf.get_parser_load_metadata()
+    try:
+        metadata = apf.configure_parser_load_limits(
+            requests_quantity=123,
+            async_rpc_batch_size=45,
+            max_concurrent_block_tasks=2,
+            max_save_tasks=3,
+        )
+
+        assert metadata == {
+            "requests_quantity": 123,
+            "async_rpc_batch_size": 45,
+            "max_concurrent_block_tasks": 2,
+            "max_save_tasks": 3,
+        }
+    finally:
+        apf.configure_parser_load_limits(**original)
+
+
+def test_vin_gap_summary_treats_coinbase_prev_tx_links_as_allowed_exclusions():
+    prev_tx_vout_to_current_tx_map = {
+        "normal_prev": {0: "current_a", 1: "current_b"},
+        "coinbase_prev": {0: "current_c", 1: "current_d", 2: "current_e"},
+    }
+
+    coinbase_filtered_links = apf.count_vout_links_for_tx_ids(
+        prev_tx_vout_to_current_tx_map,
+        {"coinbase_prev"},
+    )
+    summary = apf.build_vin_record_gap_summary(
+        actual_records_count=2,
+        vout_links_count=5,
+        coinbase_filtered_links=coinbase_filtered_links,
+    )
+
+    assert coinbase_filtered_links == 3
+    assert summary == {
+        "actual_records_count": 2,
+        "vout_links_count": 5,
+        "coinbase_filtered_links": 3,
+        "expected_records_count": 2,
+        "unexplained_missing_count": 0,
+        "unexplained_missing_pct": 0.0,
+    }
+
+
+def test_vin_gap_summary_keeps_unexplained_missing_records_visible():
+    summary = apf.build_vin_record_gap_summary(
+        actual_records_count=1,
+        vout_links_count=5,
+        coinbase_filtered_links=3,
+    )
+
+    assert summary["expected_records_count"] == 2
+    assert summary["unexplained_missing_count"] == 1
+    assert summary["unexplained_missing_pct"] == 50.0

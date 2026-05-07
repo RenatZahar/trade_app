@@ -1,5 +1,6 @@
 # app_project\modules\bts_rices_cleaning.py
 import time
+import sitecustomize  # noqa: F401
 import pandas as pd
 import gzip
 from datetime import datetime, timedelta

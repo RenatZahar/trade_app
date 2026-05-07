@@ -1,6 +1,7 @@
 import os
 import time
 import os
+import sitecustomize  # noqa: F401
 import pandas as pd
 import modules.finding_price_peaks.price_peaks_func as pnt
 

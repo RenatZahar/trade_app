@@ -1,6 +1,7 @@
 import sqlite3
 import traceback
 from pathlib import Path
+import sitecustomize  # noqa: F401
 import pandas as pd
 
 

@@ -40,6 +40,69 @@ Backlog
 
 ## Технические долги итерации
 
+### 0.1 Разобрать временный Windows startup workaround для `pandas`
+
+Контекст:
+
+- Во время запуска обычного parser run процесс вставал сразу после
+  `run_started` / `run_metadata` и не доходил до `Runtime preflight passed`.
+- Диагностика показала, что зависание происходило не в Bitcoin Core RPC и не в
+  SQLite, а раньше: при импорте `pandas`.
+- `faulthandler` показал стек внутри стандартного Python:
+  `pandas.compat._constants -> platform.machine() -> platform.uname() ->
+  platform.win32_ver() -> platform._wmi_query`.
+- На этой Windows-сессии WMI/CIM-запрос зависал. Из-за этого любой модуль,
+  который импортировал `pandas` до runtime-кода приложения, мог остановить
+  старт сценария до preflight, логирования профиля parser runtime и managed
+  restart Bitcoin Core.
+
+Что было сделано как временный обход:
+
+- добавлен проектный `sitecustomize.py`;
+- в нем для Windows заранее заполняется `platform._uname_cache` из безопасных
+  переменных окружения `PROCESSOR_ARCHITEW6432` /
+  `PROCESSOR_ARCHITECTURE` и `COMPUTERNAME`;
+- `sitecustomize` явно импортируется до `pandas` в parser/runtime и других
+  модулях, где `pandas` импортируется на верхнем уровне;
+- цель правки - не менять бизнес-логику, а не дать Windows WMI зависнуть до
+  старта сценария.
+
+Почему это техдолг:
+
+- `platform._uname_cache` - приватная деталь стандартной библиотеки Python, а
+  не публичный API;
+- причина может быть внешней к проекту: сломанный/зависший WMI/CIM, состояние
+  Windows Management Instrumentation service, конкретная версия Python,
+  `pandas` или окружения;
+- если WMI/CIM починить или обновить dependency stack, workaround может стать
+  лишним;
+- явные `import sitecustomize  # noqa: F401` перед `pandas` выглядят
+  неочевидно без этого контекста.
+
+Задача:
+
+- воспроизвести проблему на чистом старте Windows/venv:
+  `.venv\Scripts\python.exe -X faulthandler -c "import pandas"`;
+- отдельно проверить:
+  `.venv\Scripts\python.exe -X faulthandler -c "import platform; print(platform.machine())"`;
+- проверить состояние WMI/CIM вне Python:
+  `Get-CimInstance -ClassName Win32_OperatingSystem`;
+- понять, проблема системная или связана с конкретными версиями
+  `Python 3.12.2`, `pandas 3.0.2`, `numpy 2.4.4`;
+- если `platform.machine()` и `import pandas` стабильно завершаются без
+  зависания, попробовать удалить `sitecustomize.py` и явные импорты
+  `sitecustomize`, затем прогнать smoke-тесты и parser startup check;
+- если workaround остается, оформить его как осознанный Windows compatibility
+  layer с тестом/комментарием около единственной точки подключения.
+
+Критерий удаления:
+
+- `import pandas`, `import runtime_scenarios`,
+  `python main.py --help` и parser startup до `Runtime preflight passed`
+  стабильно проходят без `sitecustomize`;
+- `platform.machine()` не зависает в течение 5-10 секунд;
+- нет новых зависших `python.exe` процессов после проверки.
+
 ### 1. Сравнение current pipeline и legacy notebook pipeline
 
 - Адаптировать legacy-логику из Jupyter notebook к application runtime.

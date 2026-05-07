@@ -4,6 +4,7 @@ import pickle
 import os
 import re
 import time
+import sitecustomize  # noqa: F401
 import pandas as pd
 import numpy as np
 import sqlite3

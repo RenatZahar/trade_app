@@ -4,6 +4,8 @@ Operational notes and backlog for this file were moved to:
 - docs/main_notes.md
 """
 
+import sitecustomize  # noqa: F401
+
 from cli_args import parse_args
 import modules.logger.logger as app_logger_module
 from modules.logger.runtime_bootstrap import (
@@ -35,12 +37,19 @@ if __name__ == "__main__":
             finish_runtime_success(tracker)
             raise SystemExit(0)
         
-        if args.start_parser:
+        if args.start_parser or args.start_parser_background:
             import runtime_scenarios as scenarios
 
             scenarios.run_parser_monitor_scenario(
                 tx_cache_lines=args.parser_tx_cache_lines,
                 hash_cache_lines=args.parser_hash_cache_lines,
+                parser_runtime_profile=(
+                    "background" if args.start_parser_background else "standard"
+                ),
+                bitcoin_core_profile=(
+                    "background" if args.start_parser_background else "standard"
+                ),
+                restart_bitcoin_core=True,
             )
         
         if args.command == "test":

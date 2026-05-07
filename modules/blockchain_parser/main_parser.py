@@ -1,4 +1,6 @@
 # main_parser.py
+import sitecustomize  # noqa: F401
+
 import pandas as pd
 import time
 import asyncio
@@ -40,6 +42,31 @@ pd.set_option('display.expand_frame_repr', False)
 
 
 PARSER_PROGRESS_WINDOW = 10
+PARSER_GROUP_PAUSE_SECONDS = 0
+
+
+def configure_parser_group_limits(
+    quantity_of_blocks_in_iteration=None,
+    group_pause_seconds=None,
+):
+    global QUANTITY_OF_BLOCKS_IN_ITERATION, PARSER_GROUP_PAUSE_SECONDS
+
+    if quantity_of_blocks_in_iteration is not None:
+        quantity_of_blocks_in_iteration = int(quantity_of_blocks_in_iteration)
+        if quantity_of_blocks_in_iteration <= 0:
+            raise ValueError("quantity_of_blocks_in_iteration must be greater than 0")
+        QUANTITY_OF_BLOCKS_IN_ITERATION = quantity_of_blocks_in_iteration
+
+    if group_pause_seconds is not None:
+        group_pause_seconds = float(group_pause_seconds)
+        if group_pause_seconds < 0:
+            raise ValueError("group_pause_seconds must be greater than or equal to 0")
+        PARSER_GROUP_PAUSE_SECONDS = group_pause_seconds
+
+    return {
+        "quantity_of_blocks_in_iteration": QUANTITY_OF_BLOCKS_IN_ITERATION,
+        "group_pause_seconds": PARSER_GROUP_PAUSE_SECONDS,
+    }
 
 
 def _format_eta(seconds):
@@ -184,6 +211,12 @@ async def parser():
                         recent_groups=list(recent_groups),
                     )
                     _log_parser_progress(progress_snapshot)
+                    if PARSER_GROUP_PAUSE_SECONDS:
+                        logger.info(
+                            "Parser background pause: seconds=%s",
+                            PARSER_GROUP_PAUSE_SECONDS,
+                        )
+                        await asyncio.sleep(PARSER_GROUP_PAUSE_SECONDS)
 
 
                 else:

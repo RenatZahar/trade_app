@@ -7,6 +7,12 @@ EPILOG = (
     "  main-pipeline - Flask + updater + peaks + train a new model\n"
     "  param-grid    - запуск подбора параметров\n"
     "\n"
+    "Parser scenarios:\n"
+    "  --start_parser            - штатный parser run: managed standard Bitcoin Core config,\n"
+    "                              limited RPC batch/block concurrency to avoid memory spikes\n"
+    "  --start_parser_background - тихий parser run: managed Bitcoin Core config,\n"
+    "                              lower parser/RPC/save concurrency, resume-only DB guard\n"
+    "\n"
     "Integration live tests:\n"
     "  test downloaded-from-btc-data <blocks_count> [seed] - сравнение случайной выборки SQL-данных с BTC RPC\n"
     "  test downloaded-from-btc-data --blocks 873754,873755 - сравнение конкретных блоков\n"
@@ -42,10 +48,14 @@ def parse_blocks_arg(raw_blocks: list[str] | None) -> list[int] | None:
 def validate_cli_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     active_top_level_modes = [
         args.start_parser,
+        args.start_parser_background,
         args.command is not None,
     ]
     if sum(active_top_level_modes) == 0:
-        parser.error("Choose one scenario: --start_parser or a runtime command")
+        parser.error(
+            "Choose one scenario: --start_parser, --start_parser_background, "
+            "or a runtime command"
+        )
     if sum(active_top_level_modes) > 1:
         parser.error("Use only one top-level scenario at a time")
 
@@ -53,8 +63,12 @@ def validate_cli_args(parser: argparse.ArgumentParser, args: argparse.Namespace)
         args.parser_tx_cache_lines,
         args.parser_hash_cache_lines,
     ]
-    if any(value is not None for value in parser_cache_overrides) and not args.start_parser:
-        parser.error("Parser cache overrides can only be used with --start_parser")
+    parser_mode_enabled = args.start_parser or args.start_parser_background
+    if any(value is not None for value in parser_cache_overrides) and not parser_mode_enabled:
+        parser.error(
+            "Parser cache overrides can only be used with --start_parser "
+            "or --start_parser_background"
+        )
     if any(value is not None and value < 0 for value in parser_cache_overrides):
         parser.error("Parser cache limits must be greater than or equal to 0")
 
@@ -83,7 +97,17 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawTextHelpFormatter,
     )
 
-    parser.add_argument("-p", "--start_parser", action="store_true", help="Старт парсера блокчейна")
+    parser.add_argument(
+        "-p",
+        "--start_parser",
+        action="store_true",
+        help="Старт парсера блокчейна со standard managed Bitcoin Core config",
+    )
+    parser.add_argument(
+        "--start_parser_background",
+        action="store_true",
+        help="Старт парсера с тихим профилем и перезапуском Bitcoin Core под managed config",
+    )
     parser.add_argument(
         "--parser-tx-cache-lines",
         type=int,

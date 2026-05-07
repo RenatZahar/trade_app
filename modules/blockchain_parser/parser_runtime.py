@@ -32,19 +32,31 @@ def start_redis():
     return False
 
 
-def start_btc_core_monitor_and_parser():
+def start_btc_core_monitor_and_parser(
+    bitcoin_core_profile="standard",
+    restart_bitcoin_core=False,
+):
     logger.info("Старт parser_runtime.btc_status_monitor")
     if not start_redis():
         raise RuntimeError("Redis client initialization failed before parser startup.")
     waiting_for_message("check_btc_core_status_line", check_parser_status)
-    monitor_thread = threading.Thread(target=btc_status_monitor)
+    monitor_thread = threading.Thread(
+        target=btc_status_monitor,
+        kwargs={
+            "bitcoin_core_profile": bitcoin_core_profile,
+            "restart_bitcoin_core": restart_bitcoin_core,
+        },
+    )
     monitor_thread.daemon = True
     monitor_thread.start()
 
 
-def btc_status_monitor():
+def btc_status_monitor(bitcoin_core_profile="standard", restart_bitcoin_core=False):
     while True:
-        btc_status = get_btc_status()
+        btc_status = get_btc_status(
+            profile_name=bitcoin_core_profile,
+            restart_if_wrong_profile=restart_bitcoin_core,
+        )
         new_blocks_in_blockchain = blocks_to_download()
         if btc_status and new_blocks_in_blockchain:
             send_message("check_btc_core_status_line", "btc_core_ready")
