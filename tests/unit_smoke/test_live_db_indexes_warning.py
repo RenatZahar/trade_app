@@ -3,7 +3,7 @@ import warnings
 from pathlib import Path
 
 from modules.sql_funcs.data_table_indexes import REQUIRED_DATA_TABLE_INDEXES
-from settings.db_contracts import REQUIRED_DB_TABLES
+from settings.db_contracts import DB_TABLE_CONTRACTS, REQUIRED_DB_TABLES
 from settings.paths import BLOCKS_SQL_DATA
 
 
@@ -51,7 +51,7 @@ def test_live_db_tables_emit_warning_when_not_in_schema_contract():
 
     live_tables = {row[0] for row in rows}
     missing_required_tables = sorted(REQUIRED_DB_TABLES - live_tables)
-    tables_without_contract = sorted(live_tables - REQUIRED_DB_TABLES)
+    tables_without_contract = sorted(live_tables - set(DB_TABLE_CONTRACTS))
 
     if missing_required_tables:
         _warn(

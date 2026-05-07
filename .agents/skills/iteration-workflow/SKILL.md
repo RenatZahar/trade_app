@@ -1,62 +1,40 @@
 ---
 name: iteration-workflow
-description: "Use when starting, continuing, closing, merging, documenting, or creating project iterations in this repository. Covers docs/iterations, docs/junior_plus_program.md, branch checks, iteration DoD, final notes, commit/push/merge flow, and creating the next iteration branch."
+description: "Use when starting, continuing, closing, merging, documenting, or creating project iterations in this repository. Covers iteration docs, branch checks, final notes, commit/push/merge flow, and creating the next iteration branch."
 ---
 
 # Iteration Workflow
 
-Use this skill to keep project iterations consistent across chats and branches.
+Keep project iterations consistent across chats and branches without broad
+history reads.
 
 ## Required Context
 
-Read:
-
-- `docs/junior_plus_program.md`;
-- relevant `docs/iterations/iteration_<N>.md`;
-- `AGENTS.md`;
-- `git status -sb`;
-- current branch and recent commits.
+Read only what is needed. Do not reread `AGENTS.md` or `docs/agent_context.md`
+if already loaded. Usually: relevant iteration doc at `## Work Status`,
+`git status -sb`, and current branch. Read `docs/active_work_plan.md` for
+priority decisions. Read `docs/junior_plus_program.md` only for roadmap,
+learning, new-iteration, or structure questions. Inspect recent commits only for
+start/close/merge or branch diagnosis.
 
 ## Starting an Iteration
 
-1. Confirm the previous iteration branch is pushed.
-2. Confirm the previous iteration is merged into `main_branch` locally and on origin.
-3. Start from up-to-date `main_branch`.
-4. Create a feature branch named like `feature/iteration-07-module-responsibility-boundaries`.
-5. Push the new branch with upstream tracking.
-6. Create or update the iteration document with:
-   - topic;
-   - goal;
-   - context;
-   - risks;
-   - options;
-   - chosen plan;
-   - DoD.
+Confirm previous branch state, start from up-to-date `main_branch`, create a
+`feature/iteration-<NN>-<topic>` branch, push it, and create/update the iteration
+document with topic, goal, context, risks, chosen plan, DoD, and `## Work Status`.
 
 ## Continuing an Iteration
 
-1. Confirm current branch matches the active iteration.
-2. Read the active iteration document before implementation.
-3. Keep scope aligned with the iteration theme unless the user explicitly changes scope.
-4. Record important decisions and deferred work in the iteration document.
-5. Run relevant checks after code changes.
+Confirm branch match when edits/commits are expected. Read `## Work Status`,
+keep scope aligned with the iteration theme, record decisions only when useful
+for future continuation, and run relevant checks after code changes.
 
 ## Closing an Iteration
 
-1. Update the iteration document with final results, checks, known warnings, and remaining follow-up.
-2. Run a README impact check before the final commit:
-   - check whether the iteration changed public-facing project facts such as CLI commands, runtime scenarios, env/config requirements, logs/artifacts, tests/CI, high-level architecture, known limits, or roadmap;
-   - if there is impact, update `README.md` in the same iteration before closing;
-   - if there is no impact, record `README impact: none` in the iteration document;
-   - if there is impact but README is intentionally deferred, record an explicit follow-up and do not treat the iteration as fully closed unless the user accepts the deferral.
-3. Run the narrowest relevant verification. For broad runtime/CLI/logging/ML changes, use:
-   - `python -m pytest tests\unit_smoke -q`
-4. Check `git status -sb` and review the staged scope before committing.
-5. Commit with a terse iteration-focused message.
-6. Push the feature branch.
-7. Merge into `main_branch` only when requested or clearly part of the user's requested closeout.
-8. Push `main_branch`.
-9. Create and push the next iteration branch when requested.
+Update final results, checks, warnings, and follow-up. Check README impact only
+when requested, during closeout, or when public-facing facts changed. Run narrow
+verification, review staged scope, commit, push, and merge/create next branch
+only when requested or clearly part of closeout.
 
 ## Branch and Merge Rules
 
@@ -68,11 +46,6 @@ Read:
 
 ## Output
 
-Report:
-
-- active branch;
-- iteration status;
-- files updated;
-- checks run;
-- commit/push/merge result when performed;
-- next branch when created.
+Report active branch, iteration status, updated files, checks, and any
+commit/push/merge/next-branch result. Keep it short unless closeout requires
+details.

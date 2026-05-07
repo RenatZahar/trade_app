@@ -7,13 +7,26 @@ description: "Use before implementing or changing risky data work in this repo: 
 
 Use this as a hard preflight for data operations that may be slow, destructive, difficult to resume, or expensive to verify.
 
+## Required Reads
+
+Read only the safety-relevant context first. Do not reread `AGENTS.md` or
+`docs/agent_context.md` if they are already in the session.
+
+Usually enough:
+
+1. `AGENTS.md`;
+2. `docs/agent_context.md` if present;
+3. `docs/maintenance_guidelines.md`;
+4. the concrete scripts/config/tests named by the task.
+
+Do not read old experiment records or iteration histories unless they are directly needed for the proposed data change.
+
 ## Workflow
 
-1. Read `docs/maintenance_guidelines.md` before recommending an implementation.
-2. Identify the affected databases, tables, indexes, scripts, flags, and settings.
-3. Separate safe read-only inspection from risky mutation or expensive full scans.
-4. Produce a design review before implementation.
-5. Recommend one option and wait for the user to choose before risky implementation.
+1. Identify the affected databases, tables, indexes, scripts, flags, settings, and generated artifacts.
+2. Separate safe read-only inspection from risky mutation or expensive full scans.
+3. Produce a design review before implementation.
+4. Recommend one option and wait for the user to choose before risky implementation.
 
 ## Design Review Requirements
 

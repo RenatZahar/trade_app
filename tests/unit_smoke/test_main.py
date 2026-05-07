@@ -27,22 +27,51 @@ def _cli_scenarios_from_parser():
         for command_name in _test_subparser_action(parser).choices
     }
 
-    return {"--start_parser", *top_level_commands - {"test"}, *test_commands}
+    return {
+        "--start_parser",
+        "--start_parser_background",
+        *top_level_commands - {"test"},
+        *test_commands,
+    }
 
 
 def test_parse_args_accepts_start_parser_flag():
     args = cli_args.parse_args(["--start_parser"])
 
     assert args.start_parser is True
+    assert args.start_parser_background is False
     assert getattr(args, "command", None) is None
     assert args.parser_tx_cache_lines is None
     assert args.parser_hash_cache_lines is None
+
+
+def test_parse_args_accepts_start_parser_background_flag():
+    args = cli_args.parse_args(["--start_parser_background"])
+
+    assert args.start_parser is False
+    assert args.start_parser_background is True
+    assert getattr(args, "command", None) is None
 
 
 def test_parse_args_accepts_parser_cache_overrides_with_start_parser():
     args = cli_args.parse_args(
         [
             "--start_parser",
+            "--parser-tx-cache-lines",
+            "0",
+            "--parser-hash-cache-lines",
+            "0",
+        ]
+    )
+
+    assert args.parser_tx_cache_lines == 0
+    assert args.parser_hash_cache_lines == 0
+
+
+def test_parse_args_accepts_parser_cache_overrides_with_start_parser_background():
+    args = cli_args.parse_args(
+        [
+            "--start_parser_background",
             "--parser-tx-cache-lines",
             "0",
             "--parser-hash-cache-lines",
@@ -137,9 +166,15 @@ def test_parse_args_requires_one_top_level_scenario():
         cli_args.parse_args([])
 
 
+def test_parse_args_rejects_both_parser_modes():
+    with pytest.raises(SystemExit):
+        cli_args.parse_args(["--start_parser", "--start_parser_background"])
+
+
 def test_arg_parser_exposes_expected_cli_scenarios():
     assert _cli_scenarios_from_parser() == {
         "--start_parser",
+        "--start_parser_background",
         "main-pipeline",
         "param-grid",
         "test downloaded-from-btc-data",

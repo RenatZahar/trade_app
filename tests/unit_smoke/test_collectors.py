@@ -72,18 +72,35 @@ def test_collect_correlation_training_data_defaults_to_legacy(monkeypatch):
     ).train_df == "train_df"
 
 
-def test_collect_correlation_training_data_wallet_stats_is_explicit_stub():
-    with pytest.raises(NotImplementedError, match="wallet-stats is not implemented"):
-        collectors.collect_correlation_training_data(
-            "wallet-stats",
-            collectors.CollectorRequest(
-                test_fraction=0,
-                filter_params={},
-                correlation_type="basic",
-                time_window={},
-                chunk_size=150,
-            ),
-        )
+def test_collect_correlation_training_data_wallet_stats_delegates_to_wallet_stats_ops(monkeypatch):
+    calls = []
+
+    def fake_collect(request):
+        calls.append(request)
+        return "train_df", "profit_df", {"collector": "wallet-stats"}
+
+    monkeypatch.setattr(
+        collectors.wallet_stats_ops,
+        "collect_correlation_training_data_with_wallet_stats",
+        fake_collect,
+    )
+
+    request = collectors.CollectorRequest(
+        test_fraction=0,
+        filter_params={},
+        correlation_type="basic",
+        time_window={},
+        chunk_size=150,
+    )
+    result = collectors.collect_correlation_training_data(
+        "wallet-stats",
+        request,
+    )
+
+    assert calls == [request]
+    assert result.train_df == "train_df"
+    assert result.profit_test_df == "profit_df"
+    assert result.metadata == {"collector": "wallet-stats"}
 
 
 def test_collect_correlation_training_data_rejects_unknown_collector():

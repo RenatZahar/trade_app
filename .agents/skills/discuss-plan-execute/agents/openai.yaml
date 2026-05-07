@@ -1,4 +1,0 @@
-interface:
-  display_name: "Discuss Plan Execute"
-  short_description: "Frame substantial work before edits"
-  default_prompt: "Use $discuss-plan-execute to frame this substantial task before editing files."

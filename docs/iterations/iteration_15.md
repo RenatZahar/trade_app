@@ -29,11 +29,13 @@ Current resume point:
 
 - iteration 15 is open;
 - Phase 1 design review selected the minimal safe path first;
-- Phase 2-4 minimal implementation is in place: collector wrapper,
-  `main-pipeline --collector legacy`, metadata/logging, and explicit
-  `wallet-stats` stub;
-- no SQLite schema, table data, indexes, bulk operations, or maintenance
-  scripts should be changed as part of this minimal patch.
+- Phase 2-4 minimal implementation was committed and pushed:
+  collector wrapper, `main-pipeline --collector legacy`, metadata/logging, and
+  initial `wallet-stats` routing;
+- `wallet-stats` implementation is now in progress behind the collector
+  contract;
+- real DB work has started carefully: `idx_wallet_id_block_height` was created
+  on `data_table`, and an old per-wallet pilot rebuild was interrupted.
 
 Decision:
 
@@ -81,10 +83,12 @@ Checks:
 
 Next narrow step:
 
-- fix the CI-only missing `settings.data_operations` boundary by moving needed
-  constants into tracked config/code or removing the import if unused;
-- then commit/push the scoped iteration 15 changes after reviewing staged scope,
-  excluding pre-existing unrelated local files/artifacts.
+- continue in a new chat from the set-based incremental `wallet_stats` rebuild
+  design;
+- do not resume the old per-wallet rebuild pilot;
+- inspect real DB service state before any next rebuild command;
+- the next rebuild code should reset `wallet_stats` automatically when previous
+  service status is not `success`.
 
 Local worktree note at start:
 
@@ -93,6 +97,18 @@ Local worktree note at start:
   and untracked `data/models/trained_models/ElasticNet_*` artifacts;
 - they were intentionally not staged, committed, or reverted during iteration
   start.
+
+Current handoff notes:
+
+- `.venv\Scripts\python.exe -m pytest tests\unit_smoke -q` should be the first
+  verification after resuming code work.
+- Generated model artifacts and temp stdout/stderr files are not iteration
+  source changes.
+- Real DB state:
+  - `idx_wallet_id_block_height` exists on `data_table`;
+  - pilot `wallet_stats` tables may exist with `last_rebuild_status=running`;
+  - treat existing pilot rows as disposable because they came from the rejected
+    per-wallet rebuild approach.
 
 ## Почему это отдельная итерация
 
@@ -379,7 +395,156 @@ collector wallet-stats is not implemented yet
 - Old and new collectors can be compared through the same train/profit DataFrame
   contract.
 - Param grid follow-up is documented if not implemented.
-## Parser Runtime Change
+
+## Research notes - wallet_stats DB interaction design
+
+Дата: 2026-05-06.
+
+Текущий фокус:
+
+- проектируем новый способ взаимодействия между runtime scenarios и SQLite для
+  будущего `wallet-stats` collector;
+- код и DB schema пока не менять;
+- сначала зафиксировать data-access plan, актуальность `wallet_stats`, checks
+  и границы collector-а.
+
+Runtime scenario checks:
+
+- в `runtime_scenarios.py`, в main-pipeline startup flow около строки
+  `prepare_training_data_and_train_new_model(...)`, добавить preflight checks
+  для элементов, необходимых `wallet-stats` collector;
+- проверить остальные сценарии на совместимость с будущим `wallet-stats`;
+- проверки должны включать наличие таблицы `wallet_stats` и состояние ее
+  актуальности;
+- существующую проверку индексов внутри model orchestration нужно либо удалить
+  как дубликат startup preflight, либо оставить только если она проверяет
+  другой contract.
+
+Current SQL-step decisions:
+
+- шаги price update / peaks update пока не оптимизируем: они считаются
+  достаточно быстрыми;
+- legacy collector wrapper оставляем как есть;
+- legacy index creation/check around block wallet collection должен уйти из
+  collector path для `wallet-stats`; если проверка нужна, она переносится в
+  startup preflight;
+- основная зона оптимизации: выбор candidate wallets и получение transaction
+  rows для выбранных wallets в заданном block/time window.
+
+Candidate `wallet_stats` direction:
+
+- ускорить фильтрацию wallets с количеством транзакций меньше `N` в выбранном
+  периоде;
+- ускорить прямое получение transaction rows selected wallets через индексы
+  `data_table`, а не через повторный обход block lists;
+- продумать механизм актуализации `wallet_stats`, потому что parser продолжит
+  постепенно докачивать новые blocks в SQLite.
+
+Candidate service metadata:
+
+- добавить service table с рабочим названием `wallet_stats_service_data`
+  (точное имя подтвердить перед schema design);
+- хранить состояние актуальности `wallet_stats`;
+- хранить номер блока, до которого статистика пересчитана;
+- хранить допустимый lag в blocks, пока идет backfill;
+- комментарий к lag должен явно объяснять, что значение временно большое из-за
+  продолжающейся докачки blockchain data.
+
+Open design questions:
+
+- какие поля реально нужны в `wallet_stats`, чтобы ускорить шаги candidate
+  wallet filtering и transaction row fetch;
+- нужно ли менять input contract функций main pipeline или достаточно заменить
+  SQL implementation behind collector contract;
+- является ли хранение списка блоков по wallet внутри `wallet_stats`
+  оптимальным, или лучше держать отдельную normalized таблицу / полагаться на
+  composite indexes в `data_table`;
+- насколько дорог шаг построения `block_height -> block_time` map по фактическим
+  логам и можно ли оставить его как parquet cache/service lookup.
+
+Candidate wallet selection approaches:
+
+Approach A - legacy-equivalent peak interval selection:
+
+- смысл: candidate wallets выбираются только из blocks around Buy/Sell peak
+  intervals;
+- плюс: ближе к legacy behavior и может дать меньше wallets/tx rows downstream;
+- минус: каждый запуск требует дорогой выборки по block intervals и
+  `GROUP BY Wallet_id`, если не добавить отдельную normalized activity table;
+- оставить как future comparison branch, если после первой реализации нужно
+  будет предметно сравнить качество/скорость.
+
+Approach B - train-window activity selection:
+
+- смысл: candidate wallets выбираются как достаточно активные в training window,
+  а точную пригодность дальше отфильтровывает correlation calculation;
+- плюс: меньше SQL-работы в hot path, проще `wallet_stats`, меньше новых
+  moving parts;
+- минус: downstream может получить больше wallets/tx rows и потратить больше
+  CPU/Dask времени;
+- выбран для первого `wallet-stats` collector, потому что текущая гипотеза:
+  SQL и повторные выборки из `data_table` являются главным bottleneck, а лишнюю
+  dataframe/correlation работу дешевле и безопаснее переносить в CPU layer.
+
+Chosen first implementation direction:
+
+- `data_table` остается raw source of truth для transaction rows;
+- `wallet_stats` становится derived source of truth только для wallet-level
+  statistics up to `stats_until_block`;
+- первый collector version не хранит список blocks внутри `wallet_stats`;
+- filter threshold вроде `txs_count_of_wallets` не хранится как boolean flag,
+  потому что threshold задается model config и может меняться;
+- service metadata отвечает за доверие к derived stats:
+  `stats_until_block`, `allowed_lag_blocks`, `last_rebuild_status`;
+- во время blockchain backfill допустимый lag может быть временно большим
+  (например, около полугода blocks), но это должно быть явно записано в service
+  comment.
+
+Implementation sketch:
+
+- `wallet_stats` v1 fields:
+  - `Wallet_id`;
+  - `total_tx_count`;
+  - `first_block_height`;
+  - `last_block_height`;
+  - `total_abs_amount`;
+  - `updated_until_block`;
+  - `updated_at`;
+- `wallet_stats_service_data` is key-value metadata:
+  - `stats_until_block`;
+  - `allowed_lag_blocks`;
+  - `last_rebuild_status`;
+  - `last_rebuild_error`;
+  - `target_until_block`;
+- rebuild must be interruptible:
+  - process non-overlapping block chunks;
+  - aggregate wallet stats with SQL `GROUP BY Wallet_id` inside each block chunk;
+  - UPSERT additive aggregates into `wallet_stats`;
+  - commit after each chunk;
+  - advance `stats_until_block` only after a chunk is committed;
+  - continue later from `stats_until_block + 1`;
+- `wallet-stats` preflight must be read-only:
+  - require `wallet_stats`;
+  - require `wallet_stats_service_data`;
+  - require `last_rebuild_status=success`;
+  - require lag within `allowed_lag_blocks`;
+  - require the data-table index needed by the new access shape, currently
+    `idx_wallet_id_block_height` on `(Wallet_id, Block_height)`;
+  - do not create heavy indexes automatically during scenario startup.
+
+### Parser Follow-Up
+
+- Проверить связанные с parser runtime конструкции на лишний legacy-код после
+  изменений обычного/background сценариев:
+  - `main.py --start_parser` / `--start_parser_background` routing;
+  - `runtime_scenarios.run_parser_monitor_scenario(...)`;
+  - `modules.blockchain_parser.parser_runtime`;
+  - `modules.btc_core_init.btc_core_manager.start_bitcoin_core_legacy`;
+  - parser profile docs/help/tests.
+- Отдельно проверить, нужен ли legacy startup через datadir `bitcoin.conf`, или
+  все parser modes должны использовать generated `bitcoin-<profile>.conf`.
+
+### Parser Runtime Change
 
 - `--start_parser` переведен на generated Bitcoin Core `standard` profile с
   restart check, без зависимости от datadir `bitcoin.conf`.
@@ -387,5 +552,3 @@ collector wallet-stats is not implemented yet
   RPC batch/concurrency и tx cache.
 - Сохранение в SQLite теперь overlap-ится с парсингом следующей группы, но
   одновременно допускается только один активный save task.
-- Follow-up: проверить parser runtime на лишний legacy-код после изменений
-  ordinary/background сценариев.

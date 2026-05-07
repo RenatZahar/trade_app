@@ -1,52 +1,44 @@
-# Codex cost control
+<!-- docs/codex_cost_control.md -->
+# Codex Cost Control
 
-## Цель
+Status: human/reference note. Agents should not read this by default; the active
+rules live in `AGENTS.md`, `docs/agent_context.md`, and relevant skills.
 
-Снизить расход Codex credits/tokens при работе с большим проектом, не теряя
-инженерную воспроизводимость.
+## Default Rule
 
-## Рабочий режим
+Start small:
 
-- Для больших задач сначала просить короткий план и подтверждение.
-- Не запускать broad audit без явного запроса.
-- Не вставлять большие логи в чат; ссылаться на локальный файл и run_id/stage.
-- Читать логи точечно: error text, `_TRACKER_INFO`, stage, run_id, timestamp.
-- Не использовать web search, если вопрос можно решить из локального проекта.
-- Для мелких правок, тестов и документации делать минимальный diff.
-- При смене фазы или длинном чате записывать handoff summary в активную
-  итерацию и продолжать в новом чате.
+1. `AGENTS.md`;
+2. `docs/agent_context.md`;
+3. files, tests, logs, or docs directly needed for the task.
 
-## Handoff protocol
+Search before opening whole files. Do not read old iterations, translated
+rationale docs, large logs, generated artifacts, or backlog files unless the
+task explicitly needs them.
 
-Перед переходом в новый чат записать в активный iteration document:
+## Expensive Context
 
-- текущую цель;
-- активную ветку и restore point;
-- последние проверенные run_id/log files;
-- текущую ошибку;
-- файлы, которые можно читать первыми;
-- файлы/данные, которые не нужно трогать;
-- узкий следующий шаг.
+Read more only when local inspection is insufficient, the task crosses module
+boundaries, the user asks for architecture/refactor/debugging, or the work
+touches SQLite, large data, indexes, maintenance, or experiments.
 
-Для повторяемого процесса используй `$iteration-handoff`: skill описывает
-формат `## Work Status`, статусы и правила продолжения работы по активному
-пункту.
+For `logs/agent_runs/<run_id>/`, use:
 
-В новом чате начинать с короткого сообщения:
+1. `summary.json`;
+2. `manifest.json` only for metadata or artifact paths;
+3. targeted `events.jsonl` slices by run_id, stage, timestamp, or error text.
+
+## Handoff
+
+Use `$iteration-handoff` when the user wants to continue in a new chat or when
+important state would otherwise be lost. Write into iteration docs only when the
+user agrees, asks for handoff, or the handoff itself is the task.
+
+Short starter:
 
 ```text
 Проект: I:\projects\trade_app_project.
-Прочитай AGENTS.md, docs/active_work_plan.md и docs/iterations/iteration_14.md.
-Работаем в cost-control mode: без broad audit, без web если не нужно, большие
-логи не читать целиком.
-Текущая задача описана в секции "New chat handoff".
+Cost-control mode: read AGENTS.md and docs/agent_context.md first.
+If continuing iteration 15, open docs/iterations/iteration_15.md at ## Work Status.
+Do not broad-audit, read large logs end-to-end, or use web without need.
 ```
-
-## Reusable skill
-
-Для этого процесса создан проектный skill:
-
-- `.agents/skills/iteration-handoff/SKILL.md`
-
-Используй его, когда нужно продолжить итерацию в новом чате, обновить
-`Work Status`, записать handoff или снизить расход контекста.

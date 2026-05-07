@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 import logging
 
 from . import data_operations as do
+from . import wallet_stats_operations as wallet_stats_ops
 
 
 DEFAULT_COLLECTOR = "legacy"
@@ -73,7 +74,16 @@ def collect_correlation_training_data(
         )
 
     if collector == WALLET_STATS_COLLECTOR:
-        raise NotImplementedError("collector wallet-stats is not implemented yet")
+        train_df, profit_test_df, metadata = (
+            wallet_stats_ops.collect_correlation_training_data_with_wallet_stats(
+                request,
+            )
+        )
+        return CollectedTrainingData(
+            train_df=train_df,
+            profit_test_df=profit_test_df,
+            metadata=metadata,
+        )
 
     raise ValueError(
         f"Unknown main pipeline collector: {collector}. "

@@ -7,6 +7,12 @@ description: "Use when asked to review Python modules, patches, diffs, or tests 
 
 Use this as a review-only workflow. Do not edit files unless the user explicitly changes the task from review to implementation.
 
+## Scope Rule
+
+Inspect only the requested file, patch, diff, and the nearest code/tests needed to validate behavior.
+
+Do not expand into a broad architecture audit unless the user explicitly asks for it or a concrete finding requires checking a caller/callee contract.
+
 ## Review Focus
 
 Prioritize:
@@ -41,3 +47,5 @@ Do not lead with style nits. Mention style only when it hides a real bug or main
 ## Output
 
 If issues exist, output findings first. If no issues are found, say that clearly and mention remaining test gaps or residual risk.
+
+Keep output concise. Do not paste long code excerpts.

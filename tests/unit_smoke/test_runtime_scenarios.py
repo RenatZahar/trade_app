@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import subprocess
 import sys
 import types
@@ -62,11 +63,15 @@ def test_prepare_training_data_and_train_new_model_orders_pipeline_steps(monkeyp
         "modules.teach_and_update_models.training_entrypoints",
         training_module,
     )
-    cache_settings = []
     monkeypatch.setattr(
         scenarios,
         "warn_data_table_indexes_for_scenario",
         lambda scenario_name: calls.append(("warn_indexes", scenario_name)),
+    )
+    monkeypatch.setattr(
+        scenarios,
+        "validate_main_pipeline_collector_requirements",
+        lambda collector_name: calls.append(("collector_preflight", collector_name)),
     )
     monkeypatch.setattr(
         scenarios,
@@ -81,6 +86,7 @@ def test_prepare_training_data_and_train_new_model_orders_pipeline_steps(monkeyp
     assert calls == [
         ("preflight", "main_pipeline"),
         ("warn_indexes", "main_pipeline"),
+        ("collector_preflight", "legacy"),
         "start_flask_app",
         "update_btc_price_data",
         "update_peaks",
@@ -111,6 +117,11 @@ def test_prepare_training_data_and_train_new_model_passes_collector(monkeypatch)
     )
     monkeypatch.setattr(
         scenarios,
+        "validate_main_pipeline_collector_requirements",
+        lambda collector_name: calls.append(("collector_preflight", collector_name)),
+    )
+    monkeypatch.setattr(
+        scenarios,
         "run_scenario_preflight",
         lambda scenario_name: calls.append(("preflight", scenario_name)),
     )
@@ -119,7 +130,36 @@ def test_prepare_training_data_and_train_new_model_passes_collector(monkeypatch)
 
     scenarios.prepare_training_data_and_train_new_model(collector_name="wallet-stats")
 
-    assert calls[-1] == ("teach_and_update_models", 0, None, "wallet-stats")
+    assert calls == [
+        ("preflight", "main_pipeline"),
+        ("warn_indexes", "main_pipeline"),
+        ("collector_preflight", "wallet-stats"),
+        "start_flask_app",
+        "update_btc_price_data",
+        "update_peaks",
+        ("teach_and_update_models", 0, None, "wallet-stats"),
+    ]
+
+
+def test_validate_main_pipeline_collector_requirements_checks_wallet_stats(monkeypatch):
+    calls = []
+    wallet_stats_module = types.ModuleType(
+        "modules.teach_and_update_models.wallet_stats_operations"
+    )
+    wallet_stats_module.validate_wallet_stats_ready = (
+        lambda db_path: calls.append(db_path) or {"status": "ready"}
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "modules.teach_and_update_models.wallet_stats_operations",
+        wallet_stats_module,
+    )
+
+    scenarios.validate_main_pipeline_collector_requirements("legacy")
+    assert calls == []
+
+    scenarios.validate_main_pipeline_collector_requirements("wallet-stats")
+    assert calls == [scenarios.BLOCKS_SQL_DATA]
 
 
 def test_run_param_grid_scenario_orders_steps(monkeypatch):
@@ -240,6 +280,127 @@ def test_run_parser_monitor_scenario_orders_steps(monkeypatch):
     assert group_settings == [(40, 0)]
 
 
+def test_run_parser_monitor_scenario_background_profile_orders_steps(monkeypatch):
+    calls = []
+    cache_settings = []
+    load_settings = []
+    group_settings = []
+    monkeypatch.setattr(
+        scenarios,
+        "warn_data_table_indexes_for_scenario",
+        lambda scenario_name: calls.append(("warn_indexes", scenario_name)),
+    )
+    monkeypatch.setattr(
+        scenarios,
+        "run_scenario_preflight",
+        lambda scenario_name: calls.append(("preflight", scenario_name)),
+    )
+    monkeypatch.setattr(
+        scenarios,
+        "validate_parser_background_resume_source",
+        lambda db_path: calls.append(("resume_guard", db_path)) or 877672,
+    )
+    monkeypatch.setattr(
+        scenarios,
+        "start_btc_core_monitor_and_parser",
+        lambda bitcoin_core_profile="standard", restart_bitcoin_core=False: calls.append(
+            (
+                "start_btc_core_monitor_and_parser",
+                bitcoin_core_profile,
+                restart_bitcoin_core,
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        scenarios.apf,
+        "configure_cache_limits",
+        lambda tx_cache_lines=None, hash_cache_lines=None: cache_settings.append(
+            (tx_cache_lines, hash_cache_lines)
+        ),
+    )
+    monkeypatch.setattr(
+        scenarios.apf,
+        "configure_parser_load_limits",
+        lambda requests_quantity=None,
+        max_save_tasks=None,
+        async_rpc_batch_size=None,
+        max_concurrent_block_tasks=None: load_settings.append(
+            (
+                requests_quantity,
+                max_save_tasks,
+                async_rpc_batch_size,
+                max_concurrent_block_tasks,
+            )
+        )
+        or {
+            "requests_quantity": requests_quantity,
+            "max_save_tasks": max_save_tasks,
+            "async_rpc_batch_size": async_rpc_batch_size,
+            "max_concurrent_block_tasks": max_concurrent_block_tasks,
+        },
+    )
+    monkeypatch.setattr(
+        scenarios.apf,
+        "get_cache_metadata",
+        lambda: {"max_lines_in_tx_cache": 20000, "max_lines_in_hash_cache": 0},
+    )
+    monkeypatch.setattr(
+        scenarios.main_parser,
+        "configure_parser_group_limits",
+        lambda quantity_of_blocks_in_iteration=None, group_pause_seconds=None: group_settings.append(
+            (quantity_of_blocks_in_iteration, group_pause_seconds)
+        )
+        or {
+            "quantity_of_blocks_in_iteration": quantity_of_blocks_in_iteration,
+            "group_pause_seconds": group_pause_seconds,
+        },
+    )
+
+    scenarios.run_parser_monitor_scenario(
+        keep_alive=False,
+        parser_runtime_profile="background",
+        bitcoin_core_profile="background",
+        restart_bitcoin_core=True,
+    )
+
+    assert calls == [
+        ("preflight", "start_parser_background"),
+        ("resume_guard", scenarios.BLOCKS_SQL_DATA),
+        ("warn_indexes", "start_parser_background"),
+        ("start_btc_core_monitor_and_parser", "background", True),
+    ]
+    assert cache_settings == [(20000, 0)]
+    assert load_settings == [(100, 1, 300, 1)]
+    assert group_settings == [(4, 5)]
+
+
+def test_validate_parser_background_resume_source_rejects_missing_db(tmp_path):
+    missing_db = tmp_path / "missing.db"
+
+    with pytest.raises(RuntimeConfigError, match="existing BLOCKS_SQL_DATA"):
+        scenarios.validate_parser_background_resume_source(missing_db)
+
+
+def test_validate_parser_background_resume_source_rejects_empty_data_table(tmp_path):
+    db_path = tmp_path / "blocks.db"
+    with sqlite3.connect(db_path) as db:
+        db.execute("CREATE TABLE data_table (Block_height INTEGER);")
+        db.commit()
+
+    with pytest.raises(RuntimeConfigError, match="empty data_table"):
+        scenarios.validate_parser_background_resume_source(db_path)
+
+
+def test_validate_parser_background_resume_source_returns_last_block(tmp_path):
+    db_path = tmp_path / "blocks.db"
+    with sqlite3.connect(db_path) as db:
+        db.execute("CREATE TABLE data_table (Block_height INTEGER);")
+        db.execute("INSERT INTO data_table (Block_height) VALUES (877672);")
+        db.commit()
+
+    assert scenarios.validate_parser_background_resume_source(db_path) == 877672
+
+
 def test_run_downloaded_from_btc_data_scenario_orders_steps(monkeypatch):
     calls = []
     helper_module = types.ModuleType("tests.integration_live.downloaded_from_btc_scenario")
@@ -281,6 +442,11 @@ def test_run_downloaded_from_btc_data_scenario_orders_steps(monkeypatch):
 
 def test_scenario_preflight_matrix_declares_external_service_dependencies():
     assert scenarios.SCENARIO_RUNTIME_DEPENDENCIES["start_parser"] == (
+        "blocks_sql_data",
+        "redis",
+        "bitcoin_core",
+    )
+    assert scenarios.SCENARIO_RUNTIME_DEPENDENCIES["start_parser_background"] == (
         "blocks_sql_data",
         "redis",
         "bitcoin_core",

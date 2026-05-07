@@ -1,4 +1,0 @@
-interface:
-  display_name: "Review Python Module"
-  short_description: "Review Python risks without edits"
-  default_prompt: "Use $review-python-module to review this Python module without editing files."

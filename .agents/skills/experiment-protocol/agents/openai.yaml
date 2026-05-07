@@ -1,4 +1,0 @@
-interface:
-  display_name: "Experiment Protocol"
-  short_description: "Plan and record project experiments"
-  default_prompt: "Use $experiment-protocol to design, run, compare, document, or clean up a project experiment."

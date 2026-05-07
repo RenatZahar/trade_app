@@ -78,7 +78,6 @@ def main_processing_model_orchestra(model, TEST, seed=None, collector_name=DEFAU
         # data_for_teach_df -> model_param ->.........додумать
 
     logger.info('TODO: изучить возможность использовать во временном ряду не только кумулятивные суммы, но и скользящее среднее')
-    warn_required_data_table_indexes(BLOCKS_SQL_DATA, "teaching.correlation_pipeline")
     if TEST:
         logger.info("Тестовый режим")
         logger.info(f"Кол-во кошельков в тесте: {round((TEST*100), 2)} %")
@@ -154,7 +153,7 @@ def teaching_with_param_grid_orchestrator(TEACHING_TEST, seed=None):
     if not grid_params:
         raise RuntimeError("Param grid orchestration started without parameter combinations.")
 
-    chunk_size = 200
+    chunk_size = 200 #почему оно тут захардкожено? это для даска? мы же подтягиваем размер чанков из settings?если да - это надо удалить и настроть передачу настройки
 
     tmsps_data = sf.get_tmsps_data_of_model(time_grid_params)
     if not tmsps_data or 1 not in tmsps_data:
@@ -162,7 +161,7 @@ def teaching_with_param_grid_orchestrator(TEACHING_TEST, seed=None):
     tmps = tmsps_data[1]
     logger.info(str(tmps))
 
-    logger.info(f'\033[34mStart get data for testing grid (only 1 iter)\033[0m')
+    logger.info(f'Start get data for testing grid (only 1 iter)')
     # я просто хочу протестировать параметры моделей, проверить их на сходимость
     # итерации не нужны - должна быть 1 в гриде
     # в get_corelation_by_tmsp_df испльузется model.filter_params и model.correlation_params.get('correlation_type'
@@ -327,3 +326,5 @@ def teach_model_from_json(
         seed=seed,
         collector_name=collector_name,
     )
+
+

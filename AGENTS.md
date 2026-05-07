@@ -1,97 +1,96 @@
+<!-- AGENTS.md -->
 # Project Instructions
 
-## Context First
+## Operating Principle
 
-- Before non-trivial work, inspect `docs/` and the relevant files inside it.
-- Treat `docs/active_work_plan.md` as the current short-term work selector:
-  read it after `docs/junior_plus_program.md` to understand what is active,
-  deferred, and next.
-- Treat `docs/maintenance_guidelines.md` as the source of truth for SQLite, bulk data, index, and maintenance work.
-- Treat `docs/junior_plus_program.md` and `docs/iterations/` as project process and roadmap context.
-- Treat the `## Work Status` section inside the active iteration document as
-  the primary resume point when continuing work across chats.
-- Check `git status` before editing. Never revert or overwrite user changes unless explicitly requested.
+Use the smallest useful context first. Expand only when the task proves it needs
+more.
 
-## Instruction Priority
+## Entry Check
 
-- `AGENTS.md` and active `.agents/skills/*/SKILL.md` files define agent behavior.
-- `docs/*_translate_ru.md` files are user-facing explanations and rationale, not primary agent instructions.
-- If a translate file conflicts with `AGENTS.md` or an active skill, follow the active instruction.
-- When active instructions change, update related `*_translate_ru.md` files when practical.
+For any task that may edit files:
 
-## Task Modes
+1. Run `git status -sb`.
+2. Read `docs/agent_context.md` if present.
+3. Read only files, tests, logs, or docs directly relevant to the request.
+4. Do not revert, overwrite, or clean unrelated user changes unless explicitly requested.
 
-- Use a direct patch only for small local tasks: log formatting, argparse details, comments, pure-function tests, or documentation.
-- Use discuss-plan-execute for substantial, ambiguous, architectural, refactoring, research, or multi-phase work.
-- In discuss-plan-execute, first state the current understanding, risks, options, and phased plan. Implement only the selected or clearly safe phase.
-- For review requests, use a review stance: findings first, grounded in file/line references, and do not edit files unless asked.
+## Context Routing
 
-## Refactor Entry Check
+Open additional docs only by trigger:
 
-- At the start of an iteration or substantial phase that may refactor existing
-  code, first run a logic trace to identify useful intervention points before
-  editing.
-- The logic trace should state:
-  - caller responsibility;
-  - callee responsibility;
-  - duplicated responsibility;
-  - dead or unclear code;
-  - observable contract and narrow verification.
-- Use this for existing-code restructuring, simplifying old logic, moving
-  responsibilities between functions, or removing suspected redundant code.
-- Do not require this ceremony for clearly new code, smoke tests, technical
-  documentation, log wording, argparse details, small pure-function tests, or
-  other narrow local tasks where the responsibility boundary is already clear.
+- Iteration start/continue/close/merge: read `docs/active_work_plan.md` and the relevant `docs/iterations/iteration_<N>.md`, starting at `## Work Status`.
+- Roadmap, learning plan, Junior+ process, portfolio framing: read `docs/junior_plus_program.md`.
+- SQLite, large data, indexes, maintenance, `data_table`, `few_tx_wallets`, `wallet_stats`, `moving_txs`, `VACUUM`, `ANALYZE`, migrations, or long-running DB work: read `docs/maintenance_guidelines.md` and use `$data-pipeline-safety-check`.
+- Experiments, competing approaches, performance hypotheses, temporary layouts, or experimental code: use `$experiment-protocol`.
+- Logs or agent artifacts: read `summary.json` first, then targeted metadata or `events.jsonl` slices. Never read large logs end-to-end by default.
+- README impact: check only when closing an iteration, when the user asks, or when user-facing behavior clearly changed.
 
-## Cost Control Mode
+`docs/*_translate_ru.md` files are explanatory user-facing notes, not primary
+instructions. Do not read them by default. Update them only when the task
+explicitly changes project instructions or docs.
 
-- For large tasks, first give a short plan and wait for confirmation unless the
-  user explicitly asked to execute immediately.
-- Do not perform broad audits without an explicit request.
-- Do not read large logs end-to-end; first search by run_id, stage, error text,
-  or timestamp and then read the smallest useful slice.
-- Do not use web search when the question can be answered from local project
-  context.
-- For documentation and small fixes, keep diffs minimal.
-- When the chat context becomes long or the task scope changes materially,
-  suggest a new chat and write a short handoff summary into the active iteration
-  document before continuing.
+## Task Routing
 
-## Hard Stop: Data and Maintenance Safety
+Use direct patch for narrow local tasks: typos, comments, log format, argparse
+wording, small docs, small pure-function tests, or obvious targeted tests.
 
-- For tasks involving large data, SQLite, `data_table`, `few_tx_wallets`, `wallet_stats`, `moving_txs`, bulk `INSERT` / `DELETE` / `UPDATE`, indexes, `VACUUM`, `ANALYZE`, migrations, or long-running maintenance scripts, do not implement the first working idea immediately.
-- First produce a design review comparing at least:
-  - minimal patch;
-  - set-based SQL / production-oriented approach;
-  - workaround / maintenance approach;
-  - long-term architecture option when relevant.
-- Compare speed, data-loss risk, interruption/resume behavior, index impact, verification before/after, and maintenance complexity.
-- Recommend one option, then wait for the user to choose before risky implementation.
-- Read-only information gathering is allowed without confirmation when it does not mutate the database and does not require expensive full scans. Avoid full `COUNT(*)`, full-table `GROUP BY`, broad `quick_check`, or similar expensive scans unless the user accepts the cost.
+Use `$discuss-plan-execute` for substantial, ambiguous, architectural,
+refactoring, research, multi-file, multi-phase, or high-risk work.
 
-## Experiment Protocol
+Use `$review-python-module` for review requests. Findings first; do not edit
+files unless asked.
 
-- Use `$experiment-protocol` when designing, running, comparing, documenting, or cleaning up experimental code, data layouts, competing pipelines, performance hypotheses, or architecture alternatives.
-- Store experiment decision records under `docs/experiments/`.
-- If an experiment touches SQLite, large data, indexes, maintenance scripts, or long-running DB work, also use `$data-pipeline-safety-check` and wait for the user to choose a safe option before mutation.
+Use `$iteration-workflow` for starting, continuing, closing, merging, or creating
+iterations.
 
-## Skills
+Use `$iteration-handoff` when continuing in a new chat, updating Work Status, or
+preserving state across context limits.
 
-- Use `$data-pipeline-safety-check` for risky SQLite, bulk data, index, and maintenance tasks.
-- Use `$discuss-plan-execute` for substantial or ambiguous work that should be framed before editing.
-- Use `$review-python-module` when asked to review Python code or patches without editing.
-- Use `$iteration-workflow` when starting, continuing, closing, merging, or creating a project iteration.
-- Use `$iteration-handoff` when continuing an iteration in a new chat, updating
-  Work Status, writing handoff context, or reducing chat context/cost.
-- Use `$experiment-protocol` when working with experiments, competing approaches, temporary experimental code, or performance hypotheses.
-- Do not let a meta-skill or retrospective rewrite project instructions automatically. Propose instruction changes and wait for explicit confirmation.
+## Refactor Check
+
+Before substantial restructuring, state a concise logic trace:
+
+- caller responsibility;
+- callee responsibility;
+- duplicated or unclear responsibility;
+- observable contract and narrow verification.
+
+Skip this for new code, docs, log wording, argparse details, smoke tests, and
+other narrow local changes.
+
+## Cost Control
+
+- Do not perform broad audits without explicit request.
+- Search first, then open the smallest useful file slice.
+- Do not inspect whole directories, long iteration histories, or large logs unless needed.
+- Do not paste large logs or long code excerpts into responses.
+- Keep docs and small fixes minimal.
+- Suggest a new chat when context becomes long or scope changes materially.
+- Write handoff into iteration docs only when the user agrees, asks for it, or the task is handoff work.
+- Do not use web search when local project context is enough.
+
+## Data Safety Hard Stop
+
+For SQLite, large data, indexes, bulk DB changes, maintenance scripts, or
+long-running DB work, do not implement the first working idea. Use
+`$data-pipeline-safety-check`, present a design review, and wait for the user to
+choose before mutation or expensive full scans. Cheap read-only metadata
+inspection is allowed.
+
+## Experiment Safety
+
+Use `$experiment-protocol` for experiments. Create a durable record under
+`docs/experiments/` only when the experiment changes direction, runtime behavior,
+data layout, or future decisions. If it touches SQLite or large data, also use
+`$data-pipeline-safety-check`.
 
 ## Validation
 
 - Run the narrowest relevant tests after code changes.
-- For broad runtime, CLI, logging, or ML pipeline changes, prefer:
-  - `python -m pytest tests\unit_smoke -q`
-- If tests are not run, state why and describe the residual risk.
+- For broad runtime, CLI, logging, or ML pipeline changes, prefer `python -m pytest tests\unit_smoke -q`.
+- Prefer `.venv` when docs or Work Status say system Python differs from the verified runtime.
+- If tests are not run, state why and the residual risk.
 
 ## Do Not
 
@@ -99,4 +98,5 @@
 - Do not rewrite large files when a scoped patch is enough.
 - Do not introduce new architecture without explaining the tradeoff.
 - Do not merge experimental code into production without a recorded decision.
-- Do not turn small local fixes into heavy proposal/spec ceremonies.
+- Do not turn small fixes into heavy proposal/spec ceremonies.
+- Do not read or summarize large logs end-to-end when a summary or targeted slice exists.

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Iteration Handoff"
-  short_description: "Resume iteration work across chats"
-  default_prompt: "Use $iteration-handoff to continue an iteration from its Work Status section or write a concise handoff for a new chat."

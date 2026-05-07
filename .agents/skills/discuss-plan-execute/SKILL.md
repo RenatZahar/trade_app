@@ -7,15 +7,29 @@ description: "Use for substantial, ambiguous, research, architecture, refactorin
 
 Use this workflow to prevent premature coding on work that needs framing.
 
+## Context Rule
+
+Start with the smallest useful context. Do not reread `AGENTS.md` or
+`docs/agent_context.md` if they are already in the session.
+
+Usually enough:
+
+1. `AGENTS.md`;
+2. `docs/agent_context.md` if present;
+3. files, tests, docs, or logs directly named by the user;
+4. additional docs only when the task trigger requires them.
+
+Do not inspect all of `docs/` by default.
+
 ## Workflow
 
-1. Inspect `docs/`, current branch, and relevant files.
-2. Restate the goal, scope, and current understanding.
-3. Identify risks, unknowns, and likely affected modules.
-4. Offer a small phased plan.
-5. Ask only blocking questions. Make reasonable assumptions for non-risky details.
+1. Restate the goal, scope, and current understanding.
+2. Identify risks, unknowns, and likely affected modules.
+3. Offer a small phased plan.
+4. Ask only blocking questions.
+5. Make reasonable assumptions for non-risky details.
 6. Execute only the agreed phase or the clearly safe next step.
-7. After execution, summarize changes and validation.
+7. After execution, summarize changed files and validation.
 
 ## Use Direct Patch Instead
 
@@ -42,5 +56,7 @@ For the framing phase, return:
 - risks;
 - plan;
 - open questions or assumptions.
+
+Keep the framing concise. Do not include long code excerpts or broad audit notes unless needed.
 
 For execution, keep patches scoped and run the narrowest useful verification.

@@ -28,12 +28,14 @@ SCENARIO_RUNTIME_DEPENDENCIES = {
     "main_pipeline": ("blocks_sql_data", "flask_app"),
     "param_grid": ("blocks_sql_data",),
     "start_parser": ("blocks_sql_data", "redis", "bitcoin_core"),
+    "start_parser_background": ("blocks_sql_data", "redis", "bitcoin_core"),
     "integration_live.downloaded_from_btc_data": ("blocks_sql_data", "bitcoin_rpc"),
 }
 
 
 CLI_SCENARIO_TO_RUNTIME_SCENARIO = {
     "--start_parser": "start_parser",
+    "--start_parser_background": "start_parser_background",
     "main-pipeline": "main_pipeline",
     "param-grid": "param_grid",
     "test downloaded-from-btc-data": "integration_live.downloaded_from_btc_data",
