@@ -9,7 +9,7 @@ EPILOG = (
     "\n"
     "Parser scenarios:\n"
     "  --start_parser            - штатный parser run: managed standard Bitcoin Core config,\n"
-    "                              limited RPC batch/block concurrency to avoid memory spikes\n"
+    "                              legacy parser throughput settings\n"
     "  --start_parser_background - тихий parser run: managed Bitcoin Core config,\n"
     "                              lower parser/RPC/save concurrency, resume-only DB guard\n"
     "\n"
