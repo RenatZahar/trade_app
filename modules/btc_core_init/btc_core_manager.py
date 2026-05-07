@@ -48,15 +48,16 @@ def get_btc_status(
 ):  #функция для вызова из main
     # logger.info(f"Старт get_btc_status.")
     if is_bitcoin_core_running(process_name):
-        profile_is_current = is_bitcoin_core_running_with_profile(
-            process_name,
-            profile_name,
-            DATA_BLOCKCHAIN_DIR,
-        ) and is_bitcoin_core_generated_config_current(
-            profile_name,
-            DATA_BLOCKCHAIN_DIR,
-        )
-        if restart_if_wrong_profile and not profile_is_current:
+        if restart_if_wrong_profile and not (
+            is_bitcoin_core_running_with_profile(
+                process_name,
+                profile_name,
+                DATA_BLOCKCHAIN_DIR,
+            ) and is_bitcoin_core_generated_config_current(
+                profile_name,
+                DATA_BLOCKCHAIN_DIR,
+            )
+        ):
             logger.warning(
                 "%s запущен не с актуальным профилем %s. "
                 "Перезапускаем с управляемым конфигом.",
@@ -74,12 +75,26 @@ def get_btc_status(
         btc_core_status = check_ready_btc_core_for_work(rpc_connection)
         return btc_core_status
     else:
-        logger.warning(f"{process_name} не запущен. Попытка перезапуска.")
-        start_bitcoin_core(
-            profile_name=profile_name,
-            process_path=BITCOIN_CORE_PATH,
-            data_blockchain_dir=DATA_BLOCKCHAIN_DIR,
-        )
+        if restart_if_wrong_profile:
+            logger.warning(
+                "%s не запущен. Попытка запуска с управляемым профилем %s.",
+                process_name,
+                profile_name,
+            )
+            start_bitcoin_core(
+                profile_name=profile_name,
+                process_path=BITCOIN_CORE_PATH,
+                data_blockchain_dir=DATA_BLOCKCHAIN_DIR,
+            )
+        else:
+            logger.warning(
+                "%s не запущен. Попытка запуска со штатным bitcoin.conf.",
+                process_name,
+            )
+            start_bitcoin_core_legacy(
+                process_path=BITCOIN_CORE_PATH,
+                data_blockchain_dir=DATA_BLOCKCHAIN_DIR,
+            )
         return False
 
 def is_bitcoin_core_running(process_name):
@@ -197,6 +212,34 @@ def start_bitcoin_core(
             data_dir,
             profile_name,
             config_path,
+        )
+        if rpc_connection is None:
+            rpc_connection = get_rpc_connection(rpc_user, rpc_password, rpc_host, rpc_port)
+        btc_core_status = check_ready_btc_core_for_work(rpc_connection)
+        return btc_core_status
+
+    except Exception as e:
+        logger.error(f"Не удалось запустить {process_path}: {e}")
+        return False
+
+
+def start_bitcoin_core_legacy(
+    rpc_connection=None,
+    process_path=BITCOIN_CORE_PATH,
+    data_blockchain_dir=DATA_BLOCKCHAIN_DIR,
+):
+    # Штатный запуск для основного сценария: настройки берутся из bitcoin.conf
+    # внутри datadir, без -conf и без -nosettings.
+    if not process_path:
+        logger.error("Переменная окружения BITCOIN_CORE_PATH не задана.")
+        return False
+    try:
+        data_dir = validate_existing_blockchain_datadir(data_blockchain_dir)
+        subprocess.Popen([process_path, f"-datadir={data_dir}"])
+        logger.info(
+            "%s был запущен со штатным bitcoin.conf: datadir=%s.",
+            process_path,
+            data_dir,
         )
         if rpc_connection is None:
             rpc_connection = get_rpc_connection(rpc_user, rpc_password, rpc_host, rpc_port)

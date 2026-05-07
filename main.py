@@ -37,18 +37,25 @@ if __name__ == "__main__":
             finish_runtime_success(tracker)
             raise SystemExit(0)
         
-        if args.start_parser or args.start_parser_background:
+        if args.start_parser:
             import runtime_scenarios as scenarios
 
             scenarios.run_parser_monitor_scenario(
                 tx_cache_lines=args.parser_tx_cache_lines,
                 hash_cache_lines=args.parser_hash_cache_lines,
-                parser_runtime_profile=(
-                    "background" if args.start_parser_background else "standard"
-                ),
-                bitcoin_core_profile=(
-                    "background" if args.start_parser_background else "standard"
-                ),
+                parser_runtime_profile="standard",
+                bitcoin_core_profile="standard",
+                restart_bitcoin_core=False,
+            )
+
+        if args.start_parser_background:
+            import runtime_scenarios as scenarios
+
+            scenarios.run_parser_monitor_scenario(
+                tx_cache_lines=args.parser_tx_cache_lines,
+                hash_cache_lines=args.parser_hash_cache_lines,
+                parser_runtime_profile="background",
+                bitcoin_core_profile="background",
                 restart_bitcoin_core=True,
             )
         
