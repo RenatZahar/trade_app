@@ -34,7 +34,7 @@ def start_redis():
 
 def start_btc_core_monitor_and_parser(
     bitcoin_core_profile="standard",
-    restart_bitcoin_core=False,
+    restart_bitcoin_core=True,
 ):
     logger.info("Старт parser_runtime.btc_status_monitor")
     if not start_redis():
@@ -51,7 +51,7 @@ def start_btc_core_monitor_and_parser(
     monitor_thread.start()
 
 
-def btc_status_monitor(bitcoin_core_profile="standard", restart_bitcoin_core=False):
+def btc_status_monitor(bitcoin_core_profile="standard", restart_bitcoin_core=True):
     while True:
         btc_status = get_btc_status(
             profile_name=bitcoin_core_profile,

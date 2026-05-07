@@ -156,6 +156,8 @@ def test_run_param_grid_scenario_orders_steps(monkeypatch):
 def test_run_parser_monitor_scenario_orders_steps(monkeypatch):
     calls = []
     cache_settings = []
+    load_settings = []
+    group_settings = []
     monkeypatch.setattr(
         scenarios,
         "warn_data_table_indexes_for_scenario",
@@ -169,7 +171,13 @@ def test_run_parser_monitor_scenario_orders_steps(monkeypatch):
     monkeypatch.setattr(
         scenarios,
         "start_btc_core_monitor_and_parser",
-        lambda: calls.append("start_btc_core_monitor_and_parser"),
+        lambda bitcoin_core_profile="standard", restart_bitcoin_core=True: calls.append(
+            (
+                "start_btc_core_monitor_and_parser",
+                bitcoin_core_profile,
+                restart_bitcoin_core,
+            )
+        ),
     )
     monkeypatch.setattr(
         scenarios.apf,
@@ -180,8 +188,40 @@ def test_run_parser_monitor_scenario_orders_steps(monkeypatch):
     )
     monkeypatch.setattr(
         scenarios.apf,
+        "configure_parser_load_limits",
+        lambda requests_quantity=None,
+        max_save_tasks=None,
+        async_rpc_batch_size=None,
+        max_concurrent_block_tasks=None: load_settings.append(
+            (
+                requests_quantity,
+                max_save_tasks,
+                async_rpc_batch_size,
+                max_concurrent_block_tasks,
+            )
+        )
+        or {
+            "requests_quantity": requests_quantity,
+            "max_save_tasks": max_save_tasks,
+            "async_rpc_batch_size": async_rpc_batch_size,
+            "max_concurrent_block_tasks": max_concurrent_block_tasks,
+        },
+    )
+    monkeypatch.setattr(
+        scenarios.apf,
         "get_cache_metadata",
         lambda: {"max_lines_in_tx_cache": 0, "max_lines_in_hash_cache": 0},
+    )
+    monkeypatch.setattr(
+        scenarios.main_parser,
+        "configure_parser_group_limits",
+        lambda quantity_of_blocks_in_iteration=None, group_pause_seconds=None: group_settings.append(
+            (quantity_of_blocks_in_iteration, group_pause_seconds)
+        )
+        or {
+            "quantity_of_blocks_in_iteration": quantity_of_blocks_in_iteration,
+            "group_pause_seconds": group_pause_seconds,
+        },
     )
 
     scenarios.run_parser_monitor_scenario(
@@ -193,9 +233,11 @@ def test_run_parser_monitor_scenario_orders_steps(monkeypatch):
     assert calls == [
         ("preflight", "start_parser"),
         ("warn_indexes", "start_parser"),
-        "start_btc_core_monitor_and_parser",
+        ("start_btc_core_monitor_and_parser", "standard", True),
     ]
     assert cache_settings == [(0, 0)]
+    assert load_settings == [(800, 1, 2000, 4)]
+    assert group_settings == [(40, 0)]
 
 
 def test_run_downloaded_from_btc_data_scenario_orders_steps(monkeypatch):

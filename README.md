@@ -78,9 +78,11 @@ These commands are live/runtime scenarios. They may require local services,
 configured paths, and project data. The smoke test command above is the safer
 first check for a fresh checkout.
 
-For the current Bitcoin RPC parser flow, the recommended parser group size is
-`QUANTITY_OF_BLOCKS_IN_ITERATION = 10` in [`settings/parser.py`](settings/parser.py).
-Larger values can overload local Bitcoin Core RPC before the Python pipeline
+`python main.py --start_parser` starts Bitcoin Core with the generated
+`standard` profile config and restarts an already-running Core process when it
+is not using that generated profile. The current standard parser profile is an
+aggressive local backfill profile in [`settings/parser.py`](settings/parser.py);
+larger values can overload local Bitcoin Core RPC before the Python pipeline
 itself becomes the bottleneck.
 
 ## Runtime Dependencies

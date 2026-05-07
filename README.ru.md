@@ -77,10 +77,12 @@ python main.py test downloaded-from-btc-data --blocks 873754,873755
 пути и проектные данные. Для свежего checkout безопаснее сначала запускать
 smoke-проверку из раздела выше.
 
-Для текущего Bitcoin RPC parser flow рекомендуемый размер группы -
-`QUANTITY_OF_BLOCKS_IN_ITERATION = 10` в [`settings/parser.py`](settings/parser.py).
-Большие значения могут перегружать локальный Bitcoin Core RPC раньше, чем
-узким местом станет Python pipeline.
+`python main.py --start_parser` запускает Bitcoin Core через сгенерированный
+`standard` profile config и перезапускает уже запущенный Core, если он работает
+не с этим generated profile. Текущий standard parser profile в
+[`settings/parser.py`](settings/parser.py) - агрессивный local backfill profile;
+большие значения могут перегружать локальный Bitcoin Core RPC раньше, чем узким
+местом станет Python pipeline.
 
 ## Runtime-зависимости
 

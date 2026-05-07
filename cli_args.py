@@ -8,7 +8,7 @@ EPILOG = (
     "  param-grid    - запуск подбора параметров\n"
     "\n"
     "Parser scenarios:\n"
-    "  --start_parser            - штатный parser run: Bitcoin Core читает bitcoin.conf из datadir\n"
+    "  --start_parser            - standard parser run: managed Bitcoin Core config\n"
     "  --start_parser_background - тихий parser run: managed Bitcoin Core config,\n"
     "                              lower parser/RPC/save concurrency, resume-only DB guard\n"
     "\n"
@@ -100,7 +100,7 @@ def build_parser() -> argparse.ArgumentParser:
         "-p",
         "--start_parser",
         action="store_true",
-        help="Старт парсера блокчейна со штатным bitcoin.conf",
+        help="Старт парсера блокчейна со standard managed Bitcoin Core config",
     )
     parser.add_argument(
         "--start_parser_background",

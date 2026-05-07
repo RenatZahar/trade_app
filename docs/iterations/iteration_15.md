@@ -379,3 +379,13 @@ collector wallet-stats is not implemented yet
 - Old and new collectors can be compared through the same train/profit DataFrame
   contract.
 - Param grid follow-up is documented if not implemented.
+## Parser Runtime Change
+
+- `--start_parser` переведен на generated Bitcoin Core `standard` profile с
+  restart check, без зависимости от datadir `bitcoin.conf`.
+- Standard parser profile усилен для backfill нагрузки: больше block group,
+  RPC batch/concurrency и tx cache.
+- Сохранение в SQLite теперь overlap-ится с парсингом следующей группы, но
+  одновременно допускается только один активный save task.
+- Follow-up: проверить parser runtime на лишний legacy-код после изменений
+  ordinary/background сценариев.

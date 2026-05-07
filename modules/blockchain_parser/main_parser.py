@@ -137,6 +137,7 @@ def _log_parser_progress(snapshot):
 
 async def parser():
     tracker = get_current_run_tracker()
+    pending_save_task = None
     try:
         logger.info("Запуск парсера блокчейна")
         send_message('parser_status', 'working')
@@ -155,8 +156,6 @@ async def parser():
             prepare_stage_details = f'blocks_to_download={len(all_blocks_to_download)}'
         
 
-
-        tasks = []
         processed_blocks = 0
         recent_groups = deque(maxlen=PARSER_PROGRESS_WINDOW)
         total_blocks_to_download = len(all_blocks_to_download)
@@ -182,16 +181,18 @@ async def parser():
                         min_block_height, max_block_height = apf.get_statistik_data(data)
                         timing["min_block"] = min_block_height
                         timing["max_block"] = max_block_height
-                    save_task = asyncio.create_task(apf.save_data_to_db_with_semaphore(data, BLOCKS_SQL_DATA))
-                    tasks.append(save_task)
                     with timed_step("parser.process_blocks_group.cycle_info", blocks=blocks_group):
                         time_of_circle = apf.print_cicle_info(start_time, min_block_height, max_block_height , len(blocks_group), data, QUANTITY_OF_BLOCKS_IN_ITERATION) # type: ignore
                     apf.get_avg_blocks_in_minut(time_of_circle)
 
-                    if tasks:
-                        with timed_step("parser.process_blocks_group.save_wait", blocks=blocks_group, df_rows=len(data)):
-                            await asyncio.gather(*tasks)
-                            tasks.clear()
+                    if pending_save_task is not None:
+                        with timed_step("parser.process_blocks_group.previous_save_wait", blocks=blocks_group, df_rows=len(data)):
+                            await pending_save_task
+                        pending_save_task = None
+
+                    pending_save_task = asyncio.create_task(
+                        apf.save_data_to_db_with_semaphore(data, BLOCKS_SQL_DATA)
+                    )
 
                     process_stage_details = f'blocks={len(blocks_group)} range={min_block_height}-{max_block_height}'
 
@@ -223,9 +224,19 @@ async def parser():
                     process_stage_details = f'blocks={len(blocks_group)} data_is_empty'
                     processed_blocks += len(blocks_group)
 
+        if pending_save_task is not None:
+            with timed_step("parser.final_save_wait"):
+                await pending_save_task
+
         logger.info("Закончились блоки для скачки, ожидаем перезапуск")
         send_message('parser_status', 'completed')
     except Exception as e:
+        if pending_save_task is not None and not pending_save_task.done():
+            logger.warning("Parser failed while a DB save was active; waiting for save task to finish.")
+            try:
+                await pending_save_task
+            except Exception:
+                logger.error("Active DB save failed while handling parser error.", exc_info=True)
         logger.error(f"Произошла ошибка: {e}")
         raise
 

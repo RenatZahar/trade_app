@@ -94,3 +94,81 @@ def test_parser_finishes_non_empty_block_stage_once(monkeypatch):
     assert len(process_stage_finishes) == 1
     assert process_stage_finishes[0]["details"] == "blocks=1 range=10-10"
     assert all(stage is not None for stage in finished_stages)
+
+
+def test_parser_parses_next_group_while_previous_save_is_pending(monkeypatch):
+    monkeypatch.setattr(run_tracker, "get_init_number", lambda: 701)
+    run_tracker.RunTracker(Namespace(start_parser=True))
+    events = []
+
+    async def fake_set_wal_mode(_db_path):
+        return None
+
+    async def fake_existing_last_block(_db_path, _start_block):
+        return 9
+
+    first_save_started = asyncio.Event()
+    allow_first_save_finish = asyncio.Event()
+
+    async def fake_parsing_data(blocks_group):
+        await asyncio.sleep(0)
+        events.append(("parse", tuple(blocks_group)))
+        if blocks_group == [11]:
+            events.append(("second_parse_saw_save_started", first_save_started.is_set()))
+            allow_first_save_finish.set()
+        return pd.DataFrame({"Block_height": [blocks_group[0]], "Amount": [1.0]})
+
+    async def fake_save_data_to_db_with_semaphore(data, _db_path):
+        block_height = int(data["Block_height"].iloc[0])
+        events.append(("save_start", block_height))
+        if block_height == 10:
+            first_save_started.set()
+            await allow_first_save_finish.wait()
+        events.append(("save_finish", block_height))
+
+    monkeypatch.setattr(main_parser, "PARSER_GROUP_PAUSE_SECONDS", 0)
+    monkeypatch.setattr(main_parser, "send_message", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(main_parser.apf, "set_wal_mode", fake_set_wal_mode)
+    monkeypatch.setattr(main_parser.apf, "async_get_existing_last_block", fake_existing_last_block)
+    monkeypatch.setattr(main_parser.apf, "get_rpc_connection", lambda: object())
+    monkeypatch.setattr(main_parser.apf, "get_list_of_blocks_to_download", lambda *_args: [10, 11])
+    monkeypatch.setattr(
+        main_parser.apf,
+        "split_list_into_chunks",
+        lambda *_args: iter([[10], [11]]),
+    )
+    monkeypatch.setattr(main_parser.apf, "parsing_data", fake_parsing_data)
+    monkeypatch.setattr(
+        main_parser.apf,
+        "get_statistik_data",
+        lambda data: (int(data["Block_height"].min()), int(data["Block_height"].max())),
+    )
+    monkeypatch.setattr(
+        main_parser.apf,
+        "save_data_to_db_with_semaphore",
+        fake_save_data_to_db_with_semaphore,
+    )
+    monkeypatch.setattr(main_parser.apf, "print_cicle_info", lambda *_args: 60)
+    monkeypatch.setattr(main_parser.apf, "get_avg_blocks_in_minut", lambda _time_of_circle: None)
+    monkeypatch.setattr(
+        runtime_bootstrap.app_logger_module,
+        "log_tracker_stage_started",
+        lambda _tracker, _stage_data: None,
+    )
+    monkeypatch.setattr(
+        runtime_bootstrap.app_logger_module,
+        "log_tracker_stage_finished",
+        lambda _tracker, _stage_data: None,
+    )
+    monkeypatch.setattr(
+        runtime_bootstrap.app_logger_module,
+        "log_tracker_stage_progress",
+        lambda _tracker, _details: None,
+    )
+
+    asyncio.run(main_parser.parser())
+
+    assert events.index(("parse", (11,))) < events.index(("save_finish", 10))
+    assert ("second_parse_saw_save_started", True) in events
+    assert events.index(("save_finish", 10)) < events.index(("save_start", 11))
+    assert events[-1] == ("save_finish", 11)

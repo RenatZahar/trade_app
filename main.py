@@ -45,7 +45,7 @@ if __name__ == "__main__":
                 hash_cache_lines=args.parser_hash_cache_lines,
                 parser_runtime_profile="standard",
                 bitcoin_core_profile="standard",
-                restart_bitcoin_core=False,
+                restart_bitcoin_core=True,
             )
 
         if args.start_parser_background:

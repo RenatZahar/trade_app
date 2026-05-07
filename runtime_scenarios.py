@@ -113,7 +113,7 @@ def run_parser_monitor_scenario(
     hash_cache_lines: int | None = None,
     parser_runtime_profile: str = "standard",
     bitcoin_core_profile: str = "standard",
-    restart_bitcoin_core: bool = False,
+    restart_bitcoin_core: bool = True,
 ) -> None:
     scenario_name = (
         "start_parser_background"
