@@ -6,6 +6,7 @@ EPILOG = (
     "Runtime commands:\n"
     "  main-pipeline - Flask + updater + peaks + train a new model\n"
     "  param-grid    - запуск подбора параметров\n"
+    "  wallet-stats rebuild - rebuild derived wallet_stats cache\n"
     "\n"
     "Parser scenarios:\n"
     "  --start_parser            - standard parser run: managed Bitcoin Core config\n"
@@ -74,6 +75,12 @@ def validate_cli_args(parser: argparse.ArgumentParser, args: argparse.Namespace)
     if args.command == "param-grid":
         if args.test_fraction is not None and not 0 <= args.test_fraction <= 1:
             parser.error("--test-fraction must be between 0 and 1")
+
+    if args.command == "wallet-stats" and args.wallet_stats_command == "rebuild":
+        if args.block_chunk_size <= 0:
+            parser.error("--block-chunk-size must be greater than 0")
+        if args.target_until_block is not None and args.target_until_block <= 0:
+            parser.error("--target-until-block must be greater than 0")
 
     if args.command == "test" and args.data_test == "downloaded-from-btc-data":
         try:
@@ -145,6 +152,31 @@ def build_parser() -> argparse.ArgumentParser:
         "--seed",
         type=int,
         help="Опциональный seed для воспроизводимого test-fraction среза",
+    )
+
+    wallet_stats_parser = scenario_subparsers.add_parser(
+        "wallet-stats",
+        help="Maintenance commands for derived wallet_stats cache",
+    )
+    wallet_stats_subparsers = wallet_stats_parser.add_subparsers(
+        dest="wallet_stats_command",
+        required=True,
+        title="wallet-stats commands",
+    )
+    wallet_stats_rebuild_parser = wallet_stats_subparsers.add_parser(
+        "rebuild",
+        help="Rebuild or continue derived wallet_stats cache by block chunks",
+    )
+    wallet_stats_rebuild_parser.add_argument(
+        "--target-until-block",
+        type=int,
+        help="Last Block_height to include; default uses current MAX(Block_height)",
+    )
+    wallet_stats_rebuild_parser.add_argument(
+        "--block-chunk-size",
+        type=int,
+        default=10000,
+        help="Number of block heights per committed rebuild chunk",
     )
 
     test_parser = scenario_subparsers.add_parser(

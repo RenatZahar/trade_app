@@ -47,6 +47,11 @@ DB_TABLE_CONTRACTS = {
 SCENARIO_DB_TABLE_DEPENDENCIES = {
     "main_pipeline": ("data_table",),
     "param_grid": ("data_table",),
+    "wallet_stats_rebuild": (
+        "data_table",
+        "wallet_stats",
+        "wallet_stats_service_data",
+    ),
     "start_parser": ("data_table",),
     "start_parser_background": ("data_table",),
     "integration_live.downloaded_from_btc_data": ("data_table",),

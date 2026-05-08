@@ -80,15 +80,27 @@ Checks:
     `log_runtime_progress(...)`;
   - local ignored `modules/teach_and_update_models/data_operations.py` uses the
     same helper instead of a private `get_current_run_tracker()` wrapper.
+- Clean-checkout boundary cleanup:
+  - `settings.data_operations` constants used by tracked code were moved to
+    tracked `settings.main_pipeline`;
+  - tracked runtime modules no longer import private/ignored
+    `modules.teach_and_update_models.data_operations` at module import time;
+  - legacy `data_operations` is imported only inside functions that actually run
+    legacy dataframe/collector work;
+  - added a smoke regression test that prevents top-level private
+    `data_operations` imports from returning.
 
 Next narrow step:
 
-- continue in a new chat from the set-based incremental `wallet_stats` rebuild
-  design;
-- do not resume the old per-wallet rebuild pilot;
-- inspect real DB service state before any next rebuild command;
-- the next rebuild code should reset `wallet_stats` automatically when previous
-  service status is not `success`.
+- wait for parser backfill to reach approximately current chain height before
+  treating `wallet_stats` as useful for `main-pipeline`;
+- near the end of the iteration, run/update the `wallet_stats` rebuild service
+  path so `wallet_stats_service_data` records a trusted `stats_until_block`,
+  `last_rebuild_status=success`, target block, and allowed lag;
+- only after the `wallet_stats` service state is current enough, adapt SQL data
+  collection in `main-pipeline` to consume `wallet_stats` through the collector
+  contract;
+- do not resume the old per-wallet rebuild pilot.
 
 Local worktree note at start:
 
@@ -106,9 +118,12 @@ Current handoff notes:
   source changes.
 - Real DB state:
   - `idx_wallet_id_block_height` exists on `data_table`;
-  - pilot `wallet_stats` tables may exist with `last_rebuild_status=running`;
-  - treat existing pilot rows as disposable because they came from the rejected
-    per-wallet rebuild approach.
+  - current work waits for parser backfill before rebuilding/updating
+    `wallet_stats` for `main-pipeline`;
+  - `wallet_stats_service_data` must be updated by the rebuild service before
+    `main-pipeline --collector wallet-stats` is expected to pass preflight;
+  - adapting `main-pipeline` SQL collection comes after the service metadata
+    update task, not before it.
 
 ## Почему это отдельная итерация
 

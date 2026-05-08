@@ -15,7 +15,6 @@ Non-responsibility:
 from dataclasses import dataclass, field
 import logging
 
-from . import data_operations as do
 from . import wallet_stats_operations as wallet_stats_ops
 
 
@@ -56,6 +55,8 @@ def collect_correlation_training_data(
     logger.info("Active main pipeline collector: %s", collector)
 
     if collector == DEFAULT_COLLECTOR:
+        from . import data_operations as do
+
         train_df, profit_test_df = do.get_corelation_by_tmsp_df(
             request.test_fraction,
             request.filter_params,

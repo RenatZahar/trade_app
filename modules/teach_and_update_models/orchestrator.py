@@ -33,7 +33,6 @@ from settings.main_pipeline import MAIN_PIPELINE_CORRELATION_CHUNK_SIZE
 from settings.paths import NEW_PARAM_GRID_DIR, PARAM_GRID_DIR, PARAM_GRID_RESULTS
 from settings.paths import BLOCKS_SQL_DATA
 from . import service_funcs as sf
-from . import data_operations as do
 from . import model_classes as mc
 from modules.sql_funcs.data_table_indexes import warn_required_data_table_indexes
  
@@ -70,6 +69,8 @@ def log_dataframe_summary(name, df):
 
 
 def main_processing_model_orchestra(model, TEST, seed=None, collector_name=DEFAULT_COLLECTOR):
+    from . import data_operations as do
+
     tracker = get_current_run_tracker()
 
     # ДОБАВИТЬ В ПАРАМЕТРЫ МОДЕЛИ ПАРАМЕТРЫ ЗАТУХАНИЯ ДЛЯ ТЕСТА В ПАРАМ ГРИД. ПЕРЕДЕЛАТЬ ФУНКЦИЮ ТЕСТИРОВАНИЯ ПАРАМ ГРИДА ПОД РАЗНЫЕ
@@ -143,6 +144,8 @@ def main_processing_model_orchestra(model, TEST, seed=None, collector_name=DEFAU
         gc.collect()
 
 def teaching_with_param_grid_orchestrator(TEACHING_TEST, seed=None):
+    from . import data_operations as do
+
     warn_required_data_table_indexes(BLOCKS_SQL_DATA, "param_grid.correlation_pipeline")
     time_grid_params, grid_params = sf.check_for_new_param_grid()
     update_runtime_metadata(

@@ -1,6 +1,8 @@
 import os
 import importlib.util
 import inspect
+import sys
+import types
 from pathlib import Path
 
 import pandas as pd
@@ -20,7 +22,15 @@ def test_get_tmsps_data_of_model_builds_required_pipeline_windows(monkeypatch):
     from modules.teach_and_update_models import service_funcs as sf
     os.chdir(cwd)
 
-    monkeypatch.setattr(sf.do, "get_last_block_info", lambda: (100, 10_000_000))
+    fake_data_operations = types.ModuleType(
+        "modules.teach_and_update_models.data_operations"
+    )
+    fake_data_operations.get_last_block_info = lambda: (100, 10_000_000)
+    monkeypatch.setitem(
+        sys.modules,
+        "modules.teach_and_update_models.data_operations",
+        fake_data_operations,
+    )
     time_params = {
         "iterations": 1,
         "model_relevance_period_months": 0,
@@ -48,7 +58,15 @@ def test_get_tmsps_data_of_model_accepts_smoke_day_windows(monkeypatch):
     from modules.teach_and_update_models import service_funcs as sf
     os.chdir(cwd)
 
-    monkeypatch.setattr(sf.do, "get_last_block_info", lambda: (100, 10_000_000))
+    fake_data_operations = types.ModuleType(
+        "modules.teach_and_update_models.data_operations"
+    )
+    fake_data_operations.get_last_block_info = lambda: (100, 10_000_000)
+    monkeypatch.setitem(
+        sys.modules,
+        "modules.teach_and_update_models.data_operations",
+        fake_data_operations,
+    )
     time_params = {
         "iterations": 1,
         "model_relevance_period_months": 0,

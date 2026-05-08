@@ -107,6 +107,25 @@ def run_param_grid_scenario(test_fraction, seed=None) -> None:
     run_param_grid(TEACHING_TEST=test_fraction, seed=seed)
 
 
+def run_wallet_stats_rebuild_scenario(
+    target_until_block: int | None = None,
+    block_chunk_size: int = 10000,
+):
+    from modules.teach_and_update_models.wallet_stats_operations import (
+        rebuild_wallet_stats,
+    )
+
+    run_scenario_preflight("wallet_stats_rebuild")
+    warn_data_table_indexes_for_scenario("wallet_stats_rebuild")
+    result = rebuild_wallet_stats(
+        BLOCKS_SQL_DATA,
+        target_until_block=target_until_block,
+        block_chunk_size=block_chunk_size,
+    )
+    logger.info("wallet_stats rebuild finished: %s", result)
+    return result
+
+
 def run_parser_monitor_scenario(
     keep_alive: bool = True,
     tx_cache_lines: int | None = None,

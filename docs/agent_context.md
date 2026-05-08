@@ -14,8 +14,12 @@ experiment records, or runtime artifacts.
 - Current `wallet_stats` design direction: set-based incremental rebuild by
   non-overlapping block chunks, then collector filters candidate wallets by
   train-window activity and correlation handles finer filtering.
-- Next narrow step: continue iteration 15 from `## Work Status`; do not resume
-  the old per-wallet pilot rebuild.
+- Clean-checkout boundary for ignored/private `data_operations.py` has been
+  fixed locally by moving tracked imports to `settings.main_pipeline` and lazy
+  imports.
+- Next narrow step: continue iteration 15 from `## Work Status`; wait for
+  parser backfill before treating `wallet_stats` as useful; do not resume the
+  old per-wallet pilot rebuild.
 
 ## First Reads
 

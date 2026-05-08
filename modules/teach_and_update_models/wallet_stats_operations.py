@@ -20,7 +20,6 @@ import logging
 from pathlib import Path
 import sqlite3
 
-from . import data_operations as do
 from .determinism import sample_fraction
 from settings.db_contracts import WALLET_STATS_REQUIRED_DATA_TABLE_INDEXES
 from settings.paths import BLOCKS_SQL_DATA
@@ -300,7 +299,28 @@ def rebuild_wallet_stats(
         with sqlite3.connect(_db_path(db_path)) as conn:
             stats_until_block = _service_get_int(conn, SERVICE_KEY_STATS_UNTIL_BLOCK)
             last_status = _service_get(conn, SERVICE_KEY_LAST_REBUILD_STATUS)
-            if stats_until_block is None or last_status != REBUILD_STATUS_SUCCESS:
+            can_resume = (
+                stats_until_block is not None
+                and last_status in {REBUILD_STATUS_SUCCESS, REBUILD_STATUS_RUNNING}
+            )
+            if can_resume:
+                logger.info(
+                    "wallet_stats rebuild resume: status=%s stats_until_block=%s "
+                    "target_until_block=%s block_chunk_size=%s",
+                    last_status,
+                    stats_until_block,
+                    target_until_block,
+                    block_chunk_size,
+                )
+            else:
+                logger.info(
+                    "wallet_stats rebuild reset: status=%s stats_until_block=%s "
+                    "target_until_block=%s block_chunk_size=%s",
+                    last_status,
+                    stats_until_block,
+                    target_until_block,
+                    block_chunk_size,
+                )
                 conn.execute(f"DELETE FROM {_quote(WALLET_STATS_TABLE)};")
                 stats_until_block = min_block - 1
 
@@ -375,6 +395,7 @@ def rebuild_wallet_stats(
                 processed_wallet_groups += len(rows)
                 next_block = end_block + 1
 
+            final_stats_until_block = max(stats_until_block, target_until_block)
             _service_set(conn, SERVICE_KEY_LAST_REBUILD_STATUS, REBUILD_STATUS_SUCCESS)
             _service_set(conn, SERVICE_KEY_LAST_REBUILD_ERROR, "")
             conn.commit()
@@ -387,7 +408,7 @@ def rebuild_wallet_stats(
 
     return {
         "target_until_block": target_until_block,
-        "stats_until_block": target_until_block,
+        "stats_until_block": final_stats_until_block,
         "processed_wallet_groups": processed_wallet_groups,
     }
 
@@ -426,6 +447,8 @@ def collect_correlation_training_data_with_wallet_stats(
     *,
     db_path=BLOCKS_SQL_DATA,
 ):
+    from . import data_operations as do
+
     readiness = validate_wallet_stats_ready(db_path)
     tmps = request.time_window
     teaching_start_block = _require_block_height(

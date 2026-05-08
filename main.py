@@ -36,6 +36,17 @@ if __name__ == "__main__":
             scenarios.run_param_grid_scenario(test_fraction=args.test_fraction, seed=args.seed)
             finish_runtime_success(tracker)
             raise SystemExit(0)
+
+        if args.command == "wallet-stats":
+            import runtime_scenarios as scenarios
+
+            if args.wallet_stats_command == "rebuild":
+                scenarios.run_wallet_stats_rebuild_scenario(
+                    target_until_block=args.target_until_block,
+                    block_chunk_size=args.block_chunk_size,
+                )
+                finish_runtime_success(tracker)
+                raise SystemExit(0)
         
         if args.start_parser:
             import runtime_scenarios as scenarios

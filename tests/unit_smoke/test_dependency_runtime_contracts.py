@@ -1,4 +1,6 @@
 import importlib.util
+import ast
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -39,6 +41,30 @@ def test_project_uses_version_compatible_dask_dataframe_backend():
     else:
         assert dd.DataFrame.__module__ == "dask.dataframe.core"
         assert importlib.util.find_spec("dask_expr") is None
+
+
+def test_tracked_runtime_modules_do_not_top_level_import_private_data_operations():
+    repo_root = Path(__file__).resolve().parents[2]
+    module_paths = [
+        "modules/teach_and_update_models/collectors.py",
+        "modules/teach_and_update_models/model_classes.py",
+        "modules/teach_and_update_models/orchestrator.py",
+        "modules/teach_and_update_models/service_funcs.py",
+        "modules/teach_and_update_models/wallet_stats_operations.py",
+    ]
+
+    offenders = []
+    for module_path in module_paths:
+        tree = ast.parse((repo_root / module_path).read_text(encoding="utf-8"))
+        for node in tree.body:
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module is None
+                and any(alias.name == "data_operations" for alias in node.names)
+            ):
+                offenders.append(module_path)
+
+    assert offenders == []
 
 
 def test_dask_parquet_merge_asof_groupby_smoke(tmp_path):

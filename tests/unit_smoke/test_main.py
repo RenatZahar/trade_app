@@ -151,6 +151,29 @@ def test_parse_args_accepts_param_grid_command_with_seed_and_test_fraction():
     assert args.start_parser is False
 
 
+def test_parse_args_accepts_wallet_stats_rebuild_command():
+    args = cli_args.parse_args(
+        [
+            "wallet-stats",
+            "rebuild",
+            "--target-until-block",
+            "883457",
+            "--block-chunk-size",
+            "10000",
+        ]
+    )
+
+    assert args.command == "wallet-stats"
+    assert args.wallet_stats_command == "rebuild"
+    assert args.target_until_block == 883457
+    assert args.block_chunk_size == 10000
+
+
+def test_parse_args_rejects_invalid_wallet_stats_rebuild_chunk_size():
+    with pytest.raises(SystemExit):
+        cli_args.parse_args(["wallet-stats", "rebuild", "--block-chunk-size", "0"])
+
+
 def test_parse_args_requires_blocks_count_for_downloaded_btc_test():
     with pytest.raises(SystemExit):
         cli_args.parse_args(["test", "downloaded-from-btc-data"])
@@ -177,6 +200,7 @@ def test_arg_parser_exposes_expected_cli_scenarios():
         "--start_parser_background",
         "main-pipeline",
         "param-grid",
+        "wallet-stats",
         "test downloaded-from-btc-data",
     }
 

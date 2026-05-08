@@ -1,3 +1,6 @@
+import sys
+import types
+
 import pytest
 
 from modules.teach_and_update_models import collectors
@@ -17,10 +20,14 @@ def test_collect_correlation_training_data_legacy_delegates_to_current_collector
         calls.append((test, filter_params, correlation_type, tmps, chunk_size, seed))
         return "train_df", "profit_df"
 
-    monkeypatch.setattr(
-        collectors.do,
-        "get_corelation_by_tmsp_df",
-        fake_get_corelation_by_tmsp_df,
+    fake_data_operations = types.ModuleType(
+        "modules.teach_and_update_models.data_operations"
+    )
+    fake_data_operations.get_corelation_by_tmsp_df = fake_get_corelation_by_tmsp_df
+    monkeypatch.setitem(
+        sys.modules,
+        "modules.teach_and_update_models.data_operations",
+        fake_data_operations,
     )
 
     result = collectors.collect_correlation_training_data(
@@ -54,10 +61,17 @@ def test_collect_correlation_training_data_legacy_delegates_to_current_collector
 
 
 def test_collect_correlation_training_data_defaults_to_legacy(monkeypatch):
-    monkeypatch.setattr(
-        collectors.do,
-        "get_corelation_by_tmsp_df",
-        lambda *args, **kwargs: ("train_df", "profit_df"),
+    fake_data_operations = types.ModuleType(
+        "modules.teach_and_update_models.data_operations"
+    )
+    fake_data_operations.get_corelation_by_tmsp_df = lambda *args, **kwargs: (
+        "train_df",
+        "profit_df",
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "modules.teach_and_update_models.data_operations",
+        fake_data_operations,
     )
 
     assert collectors.collect_correlation_training_data(

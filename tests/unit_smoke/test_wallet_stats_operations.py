@@ -81,6 +81,104 @@ def test_rebuild_wallet_stats_populates_derived_stats_in_chunks(tmp_path):
     assert service_rows[wso.SERVICE_KEY_LAST_REBUILD_STATUS] == wso.REBUILD_STATUS_SUCCESS
 
 
+def test_rebuild_wallet_stats_resumes_running_rebuild_from_service_marker(tmp_path):
+    db_path = tmp_path / "blocks.sqlite"
+    _create_data_table(db_path)
+    wso.rebuild_wallet_stats(
+        db_path,
+        target_until_block=4,
+        block_chunk_size=2,
+    )
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            UPDATE wallet_stats_service_data
+            SET value=?
+            WHERE key=?;
+            """,
+            (wso.REBUILD_STATUS_RUNNING, wso.SERVICE_KEY_LAST_REBUILD_STATUS),
+        )
+        conn.commit()
+
+    result = wso.rebuild_wallet_stats(
+        db_path,
+        target_until_block=10,
+        block_chunk_size=2,
+    )
+
+    assert result == {
+        "target_until_block": 10,
+        "stats_until_block": 10,
+        "processed_wallet_groups": 1,
+    }
+
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT Wallet_id, total_tx_count, first_block_height, last_block_height,
+                   total_abs_amount, updated_until_block
+            FROM wallet_stats
+            ORDER BY Wallet_id;
+            """
+        ).fetchall()
+
+    assert rows == [
+        ("wallet_a", 2, 1, 3, 4.0, 4),
+        ("wallet_b", 2, 2, 4, 6.0, 4),
+        ("wallet_c", 1, 10, 10, 5.0, 10),
+    ]
+
+
+def test_rebuild_wallet_stats_resets_running_rebuild_without_service_marker(tmp_path):
+    db_path = tmp_path / "blocks.sqlite"
+    _create_data_table(db_path)
+    wso.ensure_wallet_stats_schema(db_path)
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO wallet_stats (
+                Wallet_id,
+                total_tx_count,
+                first_block_height,
+                last_block_height,
+                total_abs_amount,
+                updated_until_block,
+                updated_at
+            )
+            VALUES ('dirty_wallet', 99, 1, 1, 99.0, 1, 'dirty');
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO wallet_stats_service_data (key, value, updated_at)
+            VALUES (?, ?, 'dirty');
+            """,
+            (wso.SERVICE_KEY_LAST_REBUILD_STATUS, wso.REBUILD_STATUS_RUNNING),
+        )
+        conn.commit()
+
+    wso.rebuild_wallet_stats(
+        db_path,
+        target_until_block=4,
+        block_chunk_size=2,
+    )
+
+    with sqlite3.connect(db_path) as conn:
+        dirty_row = conn.execute(
+            "SELECT 1 FROM wallet_stats WHERE Wallet_id='dirty_wallet';"
+        ).fetchone()
+        stats_until_block = dict(
+            conn.execute(
+                "SELECT key, value FROM wallet_stats_service_data;"
+            ).fetchall()
+        )[wso.SERVICE_KEY_STATS_UNTIL_BLOCK]
+
+    assert dirty_row is None
+    assert stats_until_block == "4"
+
+
 def test_validate_wallet_stats_ready_rejects_stale_stats(tmp_path):
     db_path = tmp_path / "blocks.sqlite"
     _create_data_table(db_path)

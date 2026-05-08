@@ -29,7 +29,6 @@ from settings.paths import (
     NEW_PARAM_GRID_DIR,
     TRAINED_MODELS_DIR,
 )
-from . import data_operations as do
 
 import logging
 logger = logging.getLogger("app")
@@ -82,6 +81,8 @@ def get_period_seconds(time_params, days_key, months_key):
     return time_params.get(months_key, 0) * get_secs_in_month()
 
 def get_tmsps_data_of_model(time_params):
+    from . import data_operations as do
+
     iterations = time_params['iterations']
     max_block_height, last_block_time = do.get_last_block_info()
     profit_test_end_tmsp = 0

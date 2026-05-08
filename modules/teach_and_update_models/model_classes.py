@@ -31,11 +31,10 @@ from dask.delayed import delayed
 from datetime import datetime, timedelta
 from dask.distributed import as_completed
 from modules.dask_client_init.get_dask_client import get_dask_client
-from settings.data_operations import MIN_TXS_PER_WALLET, TOTAL_AMOUNT_MORE_THAN_BTC
+from settings.main_pipeline import MIN_TXS_PER_WALLET, TOTAL_AMOUNT_MORE_THAN_BTC
 from settings.paths import BLOCK_HEIGHT_BLOCK_TIME_MAP_DIR_FILE, BLOCKS_SQL_DATA, TRAINED_MODELS_DIR
 
 from . import service_funcs as sf
-from . import data_operations as do
 from .determinism import model_params_with_seed
 
 import logging
@@ -85,6 +84,8 @@ class GeneralModel():
         pass
 
     def prepare_feature_frame(self, data, feature_columns=None):
+        from . import data_operations as do
+
         feature_frame = data.drop(columns=list(self.NON_FEATURE_COLUMNS), errors='ignore')
         if feature_columns is None:
             return feature_frame
@@ -197,6 +198,8 @@ class GeneralModel():
 
 
     def calculate_total_value(self, data, dollar_qnt = 1000):
+        from . import data_operations as do
+
         if do.is_dask_dataframe_like(data):
             data = data.persist().compute()
 

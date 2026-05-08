@@ -193,6 +193,56 @@ def test_run_param_grid_scenario_orders_steps(monkeypatch):
     ]
 
 
+def test_run_wallet_stats_rebuild_scenario_orders_steps(monkeypatch):
+    calls = []
+    wallet_stats_module = types.ModuleType(
+        "modules.teach_and_update_models.wallet_stats_operations"
+    )
+    wallet_stats_module.rebuild_wallet_stats = (
+        lambda db_path, target_until_block=None, block_chunk_size=10000: calls.append(
+            (
+                "rebuild_wallet_stats",
+                db_path,
+                target_until_block,
+                block_chunk_size,
+            )
+        )
+        or {"stats_until_block": target_until_block}
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "modules.teach_and_update_models.wallet_stats_operations",
+        wallet_stats_module,
+    )
+    monkeypatch.setattr(
+        scenarios,
+        "warn_data_table_indexes_for_scenario",
+        lambda scenario_name: calls.append(("warn_indexes", scenario_name)),
+    )
+    monkeypatch.setattr(
+        scenarios,
+        "run_scenario_preflight",
+        lambda scenario_name: calls.append(("preflight", scenario_name)),
+    )
+
+    result = scenarios.run_wallet_stats_rebuild_scenario(
+        target_until_block=883457,
+        block_chunk_size=10000,
+    )
+
+    assert calls == [
+        ("preflight", "wallet_stats_rebuild"),
+        ("warn_indexes", "wallet_stats_rebuild"),
+        (
+            "rebuild_wallet_stats",
+            scenarios.BLOCKS_SQL_DATA,
+            883457,
+            10000,
+        ),
+    ]
+    assert result == {"stats_until_block": 883457}
+
+
 def test_run_parser_monitor_scenario_orders_steps(monkeypatch):
     calls = []
     cache_settings = []

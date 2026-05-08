@@ -24,7 +24,8 @@ As of 2026-05-06:
 - Continue from `docs/iterations/iteration_15.md`, section `## Work Status`.
 - Keep the minimal safe collector path unless the user changes scope.
 - Do not implement real `wallet_stats` DB behavior without a separate data safety design review.
-- Fix the clean-checkout `settings.data_operations` boundary before commit/push.
+- Clean-checkout boundary for ignored/private `data_operations.py` is fixed
+  locally; verify smoke tests before commit/push.
 
 ### 2. Make Profit-Test Results Trustworthy
 
